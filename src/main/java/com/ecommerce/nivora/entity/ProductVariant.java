@@ -7,7 +7,11 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "product_variants")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class ProductVariant {
 
     @Id
@@ -30,7 +34,12 @@ public class ProductVariant {
     @Column(name = "compare_price", precision = 12, scale = 2)
     private BigDecimal comparePrice;
 
-    // JSON stored as string: {"color":"Black","size":"M"}
+    @Column(length = 50)
+    private String color;
+
+    @Column(length = 50)
+    private String size;
+
     @Column(columnDefinition = "TEXT")
     @Builder.Default
     private String attributes = "{}";
@@ -62,8 +71,12 @@ public class ProductVariant {
     private LocalDateTime deletedAt;
 
     @PrePersist
-    protected void onCreate() { createdAt = updatedAt = LocalDateTime.now(); }
+    protected void onCreate() {
+        createdAt = updatedAt = LocalDateTime.now();
+    }
 
     @PreUpdate
-    protected void onUpdate() { updatedAt = LocalDateTime.now(); }
+    protected void onUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
 }
