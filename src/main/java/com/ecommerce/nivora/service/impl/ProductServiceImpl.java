@@ -42,8 +42,8 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<ProductResponse> getAll(Long categoryId, String brand, BigDecimal minPrice,
-                                                 BigDecimal maxPrice, BigDecimal minRating,
-                                                 String search, Pageable pageable) {
+            BigDecimal maxPrice, BigDecimal minRating,
+            String search, Pageable pageable) {
         Page<Product> page = productRepository.findWithFilters(
                 categoryId, brand, minPrice, maxPrice, minRating, search, pageable);
         return PageResponse.of(page.map(this::toResponse));
@@ -161,7 +161,8 @@ public class ProductServiceImpl implements ProductService {
         // Variants
         List<ProductVariant> variants = new ArrayList<>();
         if (request.getSku() != null && !request.getSku().isBlank()) {
-            boolean skuExists = request.getVariants() != null && request.getVariants().stream().anyMatch(v -> request.getSku().equalsIgnoreCase(v.getSku()));
+            boolean skuExists = request.getVariants() != null
+                    && request.getVariants().stream().anyMatch(v -> request.getSku().equalsIgnoreCase(v.getSku()));
             if (!skuExists && variantRepository.existsBySku(request.getSku())) {
                 throw new ConflictException("Variant SKU already exists: " + request.getSku());
             }
@@ -172,7 +173,9 @@ public class ProductServiceImpl implements ProductService {
                     .price(request.getBasePrice())
                     .comparePrice(request.getComparePrice())
                     .attributes("{}")
-                    .imageUrl(request.getImageUrls() != null && !request.getImageUrls().isEmpty() ? request.getImageUrls().get(0) : null)
+                    .imageUrl(request.getImageUrls() != null && !request.getImageUrls().isEmpty()
+                            ? request.getImageUrls().get(0)
+                            : null)
                     .isActive(request.getIsActive())
                     .sortOrder(0)
                     .build();
@@ -186,7 +189,8 @@ public class ProductServiceImpl implements ProductService {
         if (request.getVariants() != null) {
             int sort = variants.size();
             for (ProductRequest.VariantRequest vr : request.getVariants()) {
-                if (request.getSku() != null && request.getSku().equalsIgnoreCase(vr.getSku())) continue;
+                if (request.getSku() != null && request.getSku().equalsIgnoreCase(vr.getSku()))
+                    continue;
                 if (variantRepository.existsBySku(vr.getSku())) {
                     throw new ConflictException("Variant SKU already exists: " + vr.getSku());
                 }
@@ -285,9 +289,11 @@ public class ProductServiceImpl implements ProductService {
             try {
                 if (img.getUrl() != null && img.getUrl().contains("cloudinary.com")) {
                     String publicId = extractPublicIdFromUrl(img.getUrl());
-                    if (publicId != null) uploadService.deleteImage(publicId);
+                    if (publicId != null)
+                        uploadService.deleteImage(publicId);
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
         });
 
         variants.forEach(v -> {
@@ -297,9 +303,11 @@ public class ProductServiceImpl implements ProductService {
                 }
                 if (v.getImageUrl() != null && v.getImageUrl().contains("cloudinary.com")) {
                     String publicId = extractPublicIdFromUrl(v.getImageUrl());
-                    if (publicId != null) uploadService.deleteImage(publicId);
+                    if (publicId != null)
+                        uploadService.deleteImage(publicId);
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
         });
         variantRepository.deleteAll(variants);
         productRepository.delete(product);
@@ -308,13 +316,16 @@ public class ProductServiceImpl implements ProductService {
     private String extractPublicIdFromUrl(String url) {
         try {
             int idx = url.indexOf("/upload/");
-            if (idx < 0) return null;
+            if (idx < 0)
+                return null;
             String path = url.substring(idx + 8);
             int versionIdx = path.indexOf('/');
-            if (versionIdx < 0) return null;
+            if (versionIdx < 0)
+                return null;
             String withoutVersion = path.substring(versionIdx + 1);
             int dot = withoutVersion.lastIndexOf('.');
-            if (dot > 0) withoutVersion = withoutVersion.substring(0, dot);
+            if (dot > 0)
+                withoutVersion = withoutVersion.substring(0, dot);
             return withoutVersion;
         } catch (Exception e) {
             return null;
@@ -329,6 +340,8 @@ public class ProductServiceImpl implements ProductService {
                 .uuid(p.getUuid())
                 .name(p.getName())
                 .slug(p.getSlug())
+                .size(p.getSize())
+                .color(p.getColor())
                 .shortDescription(p.getShortDescription())
                 .description(p.getDescription())
                 .brand(p.getBrand())

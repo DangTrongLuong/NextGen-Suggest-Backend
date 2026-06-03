@@ -8,7 +8,11 @@ import java.util.*;
 
 @Entity
 @Table(name = "products")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class Product {
 
     @Id
@@ -56,6 +60,25 @@ public class Product {
 
     @Column(precision = 8, scale = 3)
     private BigDecimal weight;
+
+    // ── Variant-aligned fields (added) ──────────────────────────────────────
+    /** Màu sắc mặc định của sản phẩm gốc (không bắt buộc). */
+    @Column(length = 50)
+    private String color;
+
+    /** Size mặc định của sản phẩm gốc (không bắt buộc). */
+    @Column(length = 50)
+    private String size;
+
+    /** Ảnh đại diện chính của sản phẩm (ngoài bảng product_images). */
+    @Column(name = "image_url", columnDefinition = "TEXT")
+    private String imageUrl;
+
+    /** JSON attributes mặc định, ví dụ {"material":"cotton"} */
+    @Column(columnDefinition = "TEXT")
+    @Builder.Default
+    private String attributes = "{}";
+    // ────────────────────────────────────────────────────────────────────────
 
     @Column(name = "is_active", nullable = false)
     @Builder.Default
@@ -115,9 +138,12 @@ public class Product {
     @PrePersist
     protected void onCreate() {
         createdAt = updatedAt = LocalDateTime.now();
-        if (uuid == null) uuid = UUID.randomUUID().toString();
+        if (uuid == null)
+            uuid = UUID.randomUUID().toString();
     }
 
     @PreUpdate
-    protected void onUpdate() { updatedAt = LocalDateTime.now(); }
+    protected void onUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
 }

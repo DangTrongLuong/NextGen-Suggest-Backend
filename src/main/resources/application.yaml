@@ -64,6 +64,13 @@ spring:
     multipart:
       max-file-size: 10MB
       max-request-size: 10MB
+  
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD}
+      timeout: ${REDIS_TIMEOUT}
 
 jwt:
   secret: ${JWT_SECRET}
@@ -78,6 +85,9 @@ cloudinary:
 app:
   frontend-url: ${FRONTEND_URL}
   backend-url: ${BACKEND_URL}
+  fastapi-url: ${FASTAPI_URL:http://127.0.0.1:8000}
+  cache:
+    search-ttl-minutes: 60
 
 springdoc:
   api-docs:

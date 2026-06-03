@@ -5,7 +5,11 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class ProductResponse {
     private Long id;
     private String uuid;
@@ -19,6 +23,14 @@ public class ProductResponse {
     private BigDecimal basePrice;
     private BigDecimal comparePrice;
     private BigDecimal taxRate;
+
+    // ── Variant-aligned fields ───────────────────────────────────────────────
+    private String color;
+    private String size;
+    private String imageUrl;
+    private String attributes;
+    // ────────────────────────────────────────────────────────────────────────
+
     private Boolean isActive;
     private Boolean isFeatured;
     private Boolean isNew;

@@ -9,6 +9,7 @@ import java.util.Optional;
 @Repository
 public interface CategoryRepository extends JpaRepository<Category, Long> {
     Optional<Category> findBySlugAndDeletedAtIsNull(String slug);
+    Optional<Category> findByNameAndDeletedAtIsNull(String name);
     List<Category> findByParentIsNullAndDeletedAtIsNullOrderBySortOrderAsc();
     List<Category> findByParentIdAndDeletedAtIsNullOrderBySortOrderAsc(Long parentId);
     List<Category> findByIsActiveTrueAndDeletedAtIsNullOrderBySortOrderAsc();
