@@ -6,7 +6,11 @@ import lombok.*;
 import java.math.BigDecimal;
 import java.util.List;
 
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class ProductRequest {
 
     @NotBlank(message = "Product name is required")
@@ -47,6 +51,23 @@ public class ProductRequest {
     @DecimalMin(value = "0.0", message = "Weight must be positive")
     private BigDecimal weight;
 
+    // ── Variant-aligned fields ───────────────────────────────────────────────
+    /** Màu sắc mặc định của sản phẩm gốc */
+    @Size(max = 50)
+    private String color;
+
+    /** Size mặc định của sản phẩm gốc */
+    @Size(max = 50)
+    private String size;
+
+    /** Ảnh đại diện chính (không qua bảng product_images) */
+    private String imageUrl;
+
+    /** JSON attributes mặc định */
+    @Size(max = 2000)
+    private String attributes;
+    // ────────────────────────────────────────────────────────────────────────
+
     @Builder.Default
     private Boolean isActive = true;
     @Builder.Default
@@ -65,16 +86,43 @@ public class ProductRequest {
     @Valid
     private List<VariantRequest> variants;
 
-    @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
     public static class VariantRequest {
-        @NotBlank @Size(max = 120) private String sku;
-        @NotBlank @Size(max = 255) private String name;
-        @NotNull @DecimalMin(value = "0.0", message = "Variant price must be positive") private BigDecimal price;
-        @DecimalMin(value = "0.0", message = "Compare price must be positive") private BigDecimal comparePrice;
-        @Size(max = 2000) private String attributes;
+        @NotBlank
+        @Size(max = 120)
+        private String sku;
+        @NotBlank
+        @Size(max = 255)
+        private String name;
+        @NotNull
+        @DecimalMin("0.0")
+        private BigDecimal price;
+        @DecimalMin("0.0")
+        private BigDecimal comparePrice;
+
+        /** Màu sắc của variant, ví dụ "Đỏ", "#FF0000" */
+        @Size(max = 50)
+        private String color;
+
+        /** Size của variant, ví dụ "S", "M", "XL" */
+        @Size(max = 50)
+        private String size;
+
+        /** JSON attributes bổ sung, ví dụ {"material":"cotton"} */
+        @Size(max = 2000)
+        private String attributes;
+
         private String imageUrl;
-        @NotNull @Min(0) private Integer stock;
-        @Builder.Default private Boolean isActive = true;
-        @Builder.Default private Integer sortOrder = 0;
+        @NotNull
+        @Min(0)
+        private Integer stock;
+        @Builder.Default
+        private Boolean isActive = true;
+        @Builder.Default
+        private Integer sortOrder = 0;
     }
 }

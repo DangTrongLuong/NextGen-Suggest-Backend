@@ -15,9 +15,11 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     Optional<Product> findBySlugAndDeletedAtIsNull(String slug);
     Optional<Product> findByIdAndDeletedAtIsNull(Long id);
+    Optional<Product> findBySkuAndDeletedAtIsNull(String sku);
     boolean existsBySlug(String slug);
     boolean existsBySku(String sku);
     long countByDeletedAtIsNull();
+    java.util.List<Product> findBySkuInAndDeletedAtIsNullAndIsActiveTrue(java.util.List<String> skus);
 
     @Query("""
         SELECT p FROM Product p
