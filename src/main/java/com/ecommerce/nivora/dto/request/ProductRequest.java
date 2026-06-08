@@ -34,7 +34,6 @@ public class ProductRequest {
     @Min(value = 0, message = "Stock must be non-negative")
     private Integer stock;
 
-    @NotNull(message = "Base price is required")
     @DecimalMin(value = "0.0", message = "Price must be positive")
     private BigDecimal basePrice;
 

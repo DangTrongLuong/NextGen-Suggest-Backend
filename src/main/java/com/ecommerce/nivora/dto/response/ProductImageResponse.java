@@ -9,4 +9,5 @@ public class ProductImageResponse {
     private String altText;
     private Integer sortOrder;
     private Boolean isPrimary;
+    private Long variantId;
 }

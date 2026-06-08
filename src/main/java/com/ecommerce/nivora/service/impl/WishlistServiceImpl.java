@@ -83,7 +83,8 @@ public class WishlistServiceImpl implements WishlistService {
                 .ratingAvg(p.getRatingAvg()).ratingCount(p.getRatingCount())
                 .images(p.getImages().stream().map(img ->
                     ProductImageResponse.builder().id(img.getId()).url(img.getUrl())
-                        .isPrimary(img.getIsPrimary()).sortOrder(img.getSortOrder()).build()
+                        .isPrimary(img.getIsPrimary()).sortOrder(img.getSortOrder())
+                        .variantId(img.getVariant() != null ? img.getVariant().getId() : null).build()
                 ).collect(Collectors.toList()))
                 .build();
     }
