@@ -91,16 +91,14 @@ public class SearchServiceImpl implements SearchService {
                     .build();
         }
 
-        int fetchTopK = 120;
-        int candidateK = rerank ? (int) (fetchTopK * 1.5) : fetchTopK;
-
         try {
+            // Only pass page and size — FastAPI handles candidate fetch and reranking internally.
             String targetUrl = UriComponentsBuilder.fromHttpUrl(fastApiUrl)
                     .path("/api/v1/search")
                     .queryParam("q", query)
                     .queryParam("use_reranking", rerank)
-                    .queryParam("candidate_k", candidateK)
-                    .queryParam("top_k", fetchTopK)
+                    .queryParam("page", page)
+                    .queryParam("size", size)
                     .build()
                     .toUriString();
 
@@ -120,24 +118,19 @@ public class SearchServiceImpl implements SearchService {
                         .build();
             }
 
-            List<FastApiProductResult> allResults = apiResponse.getResults();
-            int totalElements = allResults.size();
-            int totalPages = (int) Math.ceil((double) totalElements / size);
+            List<FastApiProductResult> pageResults = apiResponse.getResults();
 
-            int fromIndex = page * size;
-            if (fromIndex >= totalElements) {
-                return PageResponse.<ProductResponse>builder()
-                        .content(Collections.emptyList())
-                        .page(page)
-                        .size(size)
-                        .totalElements(totalElements)
-                        .totalPages(totalPages)
-                        .last(true)
-                        .build();
+            // Dynamically compute totalElements based on how many items FastAPI returned:
+            // - If exactly `size` items returned → more pages may exist → totalElements = (page+2)*size
+            // - If fewer → this is the last page → totalElements = page*size + actualSize
+            int actualSize = pageResults.size();
+            int totalElements;
+            if (actualSize >= size) {
+                totalElements = (page + 2) * size;
+            } else {
+                totalElements = page * size + actualSize;
             }
-
-            int toIndex = Math.min(fromIndex + size, totalElements);
-            List<FastApiProductResult> pageResults = allResults.subList(fromIndex, toIndex);
+            int totalPages = (int) Math.ceil((double) totalElements / size);
 
             List<String> skus = pageResults.stream()
                     .map(FastApiProductResult::getProductId)
@@ -164,7 +157,7 @@ public class SearchServiceImpl implements SearchService {
                     .build();
 
         } catch (Exception e) {
-            log.error("Failed to perform semantic search via FastAPI", e);
+            log.error("Failed to perform paginated semantic search via FastAPI", e);
             return PageResponse.<ProductResponse>builder()
                     .content(Collections.emptyList())
                     .page(page)
@@ -175,6 +168,7 @@ public class SearchServiceImpl implements SearchService {
                     .build();
         }
     }
+
 
     private ProductResponse mapFromFastApi(FastApiProductResult res) {
         long fakeId = Math.abs((long) res.getProductId().hashCode());
