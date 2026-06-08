@@ -7,7 +7,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "categories")
+@Table(name = "categories", indexes = {
+    @Index(name = "idx_category_slug", columnList = "slug", unique = true)
+})
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class Category {
 
@@ -38,9 +40,9 @@ public class Category {
     @Column(length = 50)
     private String icon;
 
-    @Column(name = "sort_order", nullable = false)
+    @Column(name = "display_order", nullable = false)
     @Builder.Default
-    private Integer sortOrder = 0;
+    private Integer displayOrder = 0;
 
     @Column(name = "is_active", nullable = false)
     @Builder.Default
@@ -70,4 +72,8 @@ public class Category {
 
     @PreUpdate
     protected void onUpdate() { updatedAt = LocalDateTime.now(); }
+
+    public boolean isLeaf() {
+        return children == null || children.stream().allMatch(c -> c.getDeletedAt() != null);
+    }
 }

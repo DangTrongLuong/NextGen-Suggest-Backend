@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/categories")
+@RequestMapping({"/api/v1/categories", "/api/categories"})
 @RequiredArgsConstructor
 @Tag(name = "Categories", description = "Product category endpoints")
 public class CategoryController {
@@ -20,15 +20,28 @@ public class CategoryController {
     private final CategoryService categoryService;
 
     @GetMapping
-    @Operation(summary = "Get all active categories")
-    public ResponseEntity<ApiResponse<List<CategoryResponse>>> getAll() {
-        return ResponseEntity.ok(ApiResponse.success(categoryService.getAll()));
+    @Operation(summary = "Get active categories (with optional search, pagination, and parent-only filtering)")
+    public ResponseEntity<ApiResponse<?>> getAll(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Boolean parentOnly,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        if (page != null && size != null) {
+            return ResponseEntity.ok(ApiResponse.success(categoryService.getPaginated(search, parentOnly, page, size)));
+        }
+        return ResponseEntity.ok(ApiResponse.success(categoryService.getAll(search, parentOnly)));
     }
 
     @GetMapping("/tree")
     @Operation(summary = "Get category tree (nested)")
     public ResponseEntity<ApiResponse<List<CategoryResponse>>> getTree() {
         return ResponseEntity.ok(ApiResponse.success(categoryService.getTree()));
+    }
+
+    @GetMapping("/{slug}/breadcrumb")
+    @Operation(summary = "Get breadcrumb by category slug")
+    public ResponseEntity<ApiResponse<List<CategoryResponse>>> getBreadcrumb(@PathVariable String slug) {
+        return ResponseEntity.ok(ApiResponse.success(categoryService.getBreadcrumb(slug)));
     }
 
     @GetMapping("/{id}")

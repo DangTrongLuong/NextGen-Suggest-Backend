@@ -5,8 +5,14 @@ import lombok.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Entity
-@Table(name = "product_variants")
+@Table(name = "product_variants", indexes = {
+    @Index(name = "idx_variant_sku", columnList = "sku", unique = true),
+    @Index(name = "idx_variant_product_id", columnList = "product_id")
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -60,6 +66,10 @@ public class ProductVariant {
 
     @OneToOne(mappedBy = "variant", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private Inventory inventory;
+
+    @OneToMany(mappedBy = "variant", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @Builder.Default
+    private List<ProductImage> images = new ArrayList<>();
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

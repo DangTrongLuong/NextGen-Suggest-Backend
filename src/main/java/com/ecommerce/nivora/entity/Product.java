@@ -2,12 +2,17 @@ package com.ecommerce.nivora.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.Formula;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Entity
-@Table(name = "products")
+@Table(name = "products", indexes = {
+    @Index(name = "idx_product_slug", columnList = "slug", unique = true),
+    @Index(name = "idx_product_category_id", columnList = "category_id")
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -42,17 +47,11 @@ public class Product {
     @Column(length = 100)
     private String brand;
 
-    @Column(length = 100, unique = true)
-    private String sku;
-
-    @Column(name = "base_price", nullable = false, precision = 12, scale = 2)
+    @Formula("(SELECT COALESCE(MIN(v.price), 0) FROM product_variants v WHERE v.product_id = id AND v.is_active = true AND v.deleted_at IS NULL)")
     private BigDecimal basePrice;
 
-    @Column(name = "compare_price", precision = 12, scale = 2)
+    @Formula("(SELECT v.compare_price FROM product_variants v WHERE v.product_id = id AND v.is_active = true AND v.deleted_at IS NULL ORDER BY v.price ASC LIMIT 1)")
     private BigDecimal comparePrice;
-
-    @Column(name = "cost_price", precision = 12, scale = 2)
-    private BigDecimal costPrice;
 
     @Column(name = "tax_rate", nullable = false, precision = 5, scale = 2)
     @Builder.Default
@@ -60,15 +59,6 @@ public class Product {
 
     @Column(precision = 8, scale = 3)
     private BigDecimal weight;
-
-    // ── Variant-aligned fields (added) ──────────────────────────────────────
-    /** Màu sắc mặc định của sản phẩm gốc (không bắt buộc). */
-    @Column(length = 50)
-    private String color;
-
-    /** Size mặc định của sản phẩm gốc (không bắt buộc). */
-    @Column(length = 50)
-    private String size;
 
     /** Ảnh đại diện chính của sản phẩm (ngoài bảng product_images). */
     @Column(name = "image_url", columnDefinition = "TEXT")
@@ -78,7 +68,6 @@ public class Product {
     @Column(columnDefinition = "TEXT")
     @Builder.Default
     private String attributes = "{}";
-    // ────────────────────────────────────────────────────────────────────────
 
     @Column(name = "is_active", nullable = false)
     @Builder.Default
@@ -96,9 +85,8 @@ public class Product {
     @Builder.Default
     private Boolean isBestSeller = false;
 
-    @Column(name = "stock")
-    @Builder.Default
-    private Integer stock = 0;
+    @Formula("(SELECT COALESCE(SUM(i.quantity), 0) FROM product_variants v JOIN inventories i ON i.variant_id = v.id WHERE v.product_id = id AND v.is_active = true AND v.deleted_at IS NULL)")
+    private Integer stock;
 
     @Column(name = "rating_avg", nullable = false, precision = 3, scale = 2)
     @Builder.Default
@@ -114,11 +102,11 @@ public class Product {
     @Column(name = "seo_description", columnDefinition = "TEXT")
     private String seoDescription;
 
-    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default
     private List<ProductImage> images = new ArrayList<>();
 
-    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default
     private List<ProductVariant> variants = new ArrayList<>();
 
@@ -145,5 +133,42 @@ public class Product {
     @PreUpdate
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
+    }
+
+    public String getSku() {
+        if (variants == null || variants.isEmpty()) {
+            return null;
+        }
+        return variants.stream()
+                .filter(ProductVariant::getIsActive)
+                .map(ProductVariant::getSku)
+                .findFirst()
+                .orElse(null);
+    }
+
+    public String getColor() {
+        if (variants == null || variants.isEmpty()) {
+            return null;
+        }
+        return variants.stream()
+                .filter(ProductVariant::getIsActive)
+                .map(ProductVariant::getColor)
+                .filter(Objects::nonNull)
+                .filter(c -> !c.isBlank())
+                .distinct()
+                .collect(Collectors.joining(","));
+    }
+
+    public String getSize() {
+        if (variants == null || variants.isEmpty()) {
+            return null;
+        }
+        return variants.stream()
+                .filter(ProductVariant::getIsActive)
+                .map(ProductVariant::getSize)
+                .filter(Objects::nonNull)
+                .filter(s -> !s.isBlank())
+                .distinct()
+                .collect(Collectors.joining(","));
     }
 }

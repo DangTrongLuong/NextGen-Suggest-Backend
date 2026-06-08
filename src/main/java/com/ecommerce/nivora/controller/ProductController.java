@@ -16,7 +16,7 @@ import java.math.BigDecimal;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/products")
+@RequestMapping({"/api/v1/products", "/api/products"})
 @RequiredArgsConstructor
 @Tag(name = "Products", description = "Product catalog endpoints")
 public class ProductController {
@@ -27,6 +27,7 @@ public class ProductController {
     @Operation(summary = "Get all products with filters and pagination")
     public ResponseEntity<ApiResponse<PageResponse<ProductResponse>>> getAll(
             @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) String categorySlug,
             @RequestParam(required = false) String brand,
             @RequestParam(required = false) BigDecimal minPrice,
             @RequestParam(required = false) BigDecimal maxPrice,
@@ -42,20 +43,32 @@ public class ProductController {
                 : Sort.by(sortBy).descending();
 
         return ResponseEntity.ok(ApiResponse.success(
-                productService.getAll(categoryId, brand, minPrice, maxPrice, minRating, search,
+                productService.getAll(categoryId, categorySlug, brand, minPrice, maxPrice, minRating, search,
                         PageRequest.of(page, size, sort))));
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/{id:\\d+}")
     @Operation(summary = "Get product by ID")
     public ResponseEntity<ApiResponse<ProductResponse>> getById(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(productService.getById(id)));
     }
 
     @GetMapping("/slug/{slug}")
+    @Operation(summary = "Get product by slug (compat)")
+    public ResponseEntity<ApiResponse<ProductResponse>> getBySlugCompat(@PathVariable String slug) {
+        return ResponseEntity.ok(ApiResponse.success(productService.getBySlug(slug)));
+    }
+
+    @GetMapping("/{slug:\\d*[a-zA-Z-][a-zA-Z0-9-]*}")
     @Operation(summary = "Get product by slug")
     public ResponseEntity<ApiResponse<ProductResponse>> getBySlug(@PathVariable String slug) {
         return ResponseEntity.ok(ApiResponse.success(productService.getBySlug(slug)));
+    }
+
+    @GetMapping("/{id:\\d+}/variants")
+    @Operation(summary = "Get product variants")
+    public ResponseEntity<ApiResponse<List<com.ecommerce.nivora.dto.response.ProductVariantResponse>>> getVariants(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(productService.getVariants(id)));
     }
 
     @GetMapping("/featured")
@@ -76,7 +89,7 @@ public class ProductController {
         return ResponseEntity.ok(ApiResponse.success(productService.getNewArrivals()));
     }
 
-    @GetMapping("/{id}/related")
+    @GetMapping("/{id:\\d+}/related")
     @Operation(summary = "Get related products")
     public ResponseEntity<ApiResponse<List<ProductResponse>>> getRelated(
             @PathVariable Long id,

@@ -2,6 +2,8 @@ package com.ecommerce.nivora;
 
 import com.ecommerce.nivora.entity.Category;
 import com.ecommerce.nivora.entity.Product;
+import com.ecommerce.nivora.entity.ProductVariant;
+import com.ecommerce.nivora.entity.Inventory;
 import com.ecommerce.nivora.repository.CategoryRepository;
 import com.ecommerce.nivora.repository.ProductRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -14,6 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -66,7 +70,7 @@ class NivoraApplicationTests {
                             .name(finalLeafCategory)
                             .slug(slug + "-" + UUID.randomUUID().toString().substring(0, 8))
                             .isActive(true)
-                            .sortOrder(0)
+                            .displayOrder(0)
                             .build();
                     return categoryRepository.save(newCat);
                 });
@@ -79,19 +83,36 @@ class NivoraApplicationTests {
 
                 Product product = Product.builder()
                         .name(title.length() > 255 ? title.substring(0, 252) + "..." : title)
-                        .sku(sku)
                         .slug(slug)
                         .description(desc)
                         .shortDescription(desc != null && desc.length() > 490 ? desc.substring(0, 490) + "..." : desc)
-                        .basePrice(price)
-                        .comparePrice(price.multiply(BigDecimal.valueOf(1.2)))
-                        .stock(100)
                         .isActive(true)
                         .ratingAvg(BigDecimal.valueOf(4.5))
                         .ratingCount(10)
                         .category(category)
                         .imageUrl(imageUrl)
                         .build();
+
+                ProductVariant variant = ProductVariant.builder()
+                        .product(product)
+                        .sku(sku)
+                        .name("Default")
+                        .price(price)
+                        .comparePrice(price.multiply(BigDecimal.valueOf(1.2)))
+                        .color("")
+                        .size("")
+                        .imageUrl(imageUrl)
+                        .isActive(true)
+                        .sortOrder(0)
+                        .build();
+
+                Inventory inventory = Inventory.builder()
+                        .variant(variant)
+                        .quantity(100)
+                        .build();
+                variant.setInventory(inventory);
+
+                product.setVariants(new ArrayList<>(List.of(variant)));
 
                 productRepository.save(product);
                 count++;
@@ -100,3 +121,4 @@ class NivoraApplicationTests {
         }
     }
 }
+

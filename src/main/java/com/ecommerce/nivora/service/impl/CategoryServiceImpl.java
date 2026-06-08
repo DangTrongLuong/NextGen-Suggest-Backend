@@ -1,5 +1,6 @@
 package com.ecommerce.nivora.service.impl;
 
+import com.ecommerce.nivora.common.PageResponse;
 import com.ecommerce.nivora.dto.request.CategoryRequest;
 import com.ecommerce.nivora.dto.response.CategoryResponse;
 import com.ecommerce.nivora.entity.Category;
@@ -9,6 +10,9 @@ import com.ecommerce.nivora.repository.CategoryRepository;
 import com.ecommerce.nivora.service.CategoryService;
 import com.ecommerce.nivora.utils.SlugUtils;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,21 +30,38 @@ public class CategoryServiceImpl implements CategoryService {
     @Override
     @Transactional(readOnly = true)
     public List<CategoryResponse> getAll() {
-        return categoryRepository.findByIsActiveTrueAndDeletedAtIsNullOrderBySortOrderAsc()
+        return categoryRepository.findByIsActiveTrueAndDeletedAtIsNullOrderByDisplayOrderAsc()
                 .stream().map(this::toResponse).collect(Collectors.toList());
     }
 
     @Override
     @Transactional(readOnly = true)
+    public List<CategoryResponse> getAll(String search, Boolean parentOnly) {
+        boolean onlyParent = parentOnly != null && parentOnly;
+        return categoryRepository.findActiveCategories(search, onlyParent)
+                .stream().map(this::toResponse).collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<CategoryResponse> getPaginated(String search, Boolean parentOnly, int page, int size) {
+        boolean onlyParent = parentOnly != null && parentOnly;
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Category> categoryPage = categoryRepository.findActiveCategories(search, onlyParent, pageable);
+        return PageResponse.of(categoryPage.map(this::toResponse));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<CategoryResponse> getAllForAdmin() {
-        return categoryRepository.findByDeletedAtIsNullOrderBySortOrderAsc()
+        return categoryRepository.findByDeletedAtIsNullOrderByDisplayOrderAsc()
                 .stream().map(this::toResponse).collect(Collectors.toList());
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<CategoryResponse> getTree() {
-        return categoryRepository.findByParentIsNullAndDeletedAtIsNullOrderBySortOrderAsc()
+        return categoryRepository.findByParentIsNullAndDeletedAtIsNullOrderByDisplayOrderAsc()
                 .stream().map(this::toResponseWithChildren).collect(Collectors.toList());
     }
 
@@ -76,7 +97,7 @@ public class CategoryServiceImpl implements CategoryService {
                 .imageUrl(request.getImageUrl())
                 .icon(request.getIcon())
                 .parent(parent)
-                .sortOrder(request.getSortOrder())
+                .displayOrder(request.getSortOrder())
                 .isActive(request.getIsActive())
                 .seoTitle(request.getSeoTitle())
                 .seoDescription(request.getSeoDescription())
@@ -84,6 +105,20 @@ public class CategoryServiceImpl implements CategoryService {
 
         categoryRepository.save(category);
         return toResponse(category);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CategoryResponse> getBreadcrumb(String slug) {
+        Category category = categoryRepository.findBySlugAndDeletedAtIsNull(slug)
+                .orElseThrow(() -> new ResourceNotFoundException("Category not found: " + slug));
+        List<Category> path = new java.util.ArrayList<>();
+        Category current = category;
+        while (current != null) {
+            path.add(0, current);
+            current = current.getParent();
+        }
+        return path.stream().map(this::toResponse).collect(Collectors.toList());
     }
 
     @Override
@@ -96,7 +131,7 @@ public class CategoryServiceImpl implements CategoryService {
         category.setDescription(request.getDescription());
         category.setImageUrl(request.getImageUrl());
         category.setIcon(request.getIcon());
-        category.setSortOrder(request.getSortOrder());
+        category.setDisplayOrder(request.getSortOrder());
         category.setIsActive(request.getIsActive());
         category.setSeoTitle(request.getSeoTitle());
         category.setSeoDescription(request.getSeoDescription());
@@ -130,7 +165,7 @@ public class CategoryServiceImpl implements CategoryService {
                 .description(c.getDescription())
                 .imageUrl(c.getImageUrl())
                 .icon(c.getIcon())
-                .sortOrder(c.getSortOrder())
+                .sortOrder(c.getDisplayOrder())
                 .isActive(c.getIsActive())
                 .parentId(c.getParent() != null ? c.getParent().getId() : null)
                 .parentName(c.getParent() != null ? c.getParent().getName() : null)

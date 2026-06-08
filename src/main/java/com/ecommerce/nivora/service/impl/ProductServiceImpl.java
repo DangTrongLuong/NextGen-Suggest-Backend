@@ -20,7 +20,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
@@ -41,12 +44,43 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<ProductResponse> getAll(Long categoryId, String brand, BigDecimal minPrice,
+    public PageResponse<ProductResponse> getAll(Long categoryId, String categorySlug, String brand, BigDecimal minPrice,
             BigDecimal maxPrice, BigDecimal minRating,
             String search, Pageable pageable) {
+        List<Long> categoryIds = null;
+        if (categorySlug != null && !categorySlug.trim().isEmpty() && !"All".equalsIgnoreCase(categorySlug)) {
+            categoryIds = getCategoryAndDescendantIds(categorySlug);
+        } else if (categoryId != null) {
+            Category category = categoryRepository.findById(categoryId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Category", categoryId));
+            categoryIds = new ArrayList<>();
+            collectDescendantIds(category, categoryIds);
+        }
+
+        boolean applyCategoryFilter = categoryIds != null && !categoryIds.isEmpty();
+
         Page<Product> page = productRepository.findWithFilters(
-                categoryId, brand, minPrice, maxPrice, minRating, search, pageable);
+                applyCategoryFilter, categoryIds, brand, minPrice, maxPrice, minRating, search, pageable);
         return PageResponse.of(page.map(this::toResponse));
+    }
+
+    private List<Long> getCategoryAndDescendantIds(String categorySlug) {
+        Category category = categoryRepository.findBySlugAndDeletedAtIsNull(categorySlug)
+                .orElseThrow(() -> new ResourceNotFoundException("Category not found: " + categorySlug));
+        List<Long> ids = new ArrayList<>();
+        collectDescendantIds(category, ids);
+        return ids;
+    }
+
+    private void collectDescendantIds(Category category, List<Long> ids) {
+        ids.add(category.getId());
+        if (category.getChildren() != null) {
+            for (Category child : category.getChildren()) {
+                if (child.getDeletedAt() == null && child.getIsActive()) {
+                    collectDescendantIds(child, ids);
+                }
+            }
+        }
     }
 
     @Override
@@ -111,14 +145,51 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    @Transactional
-    public ProductResponse create(ProductRequest request) {
-        if (request.getSku() != null && productRepository.existsBySku(request.getSku())) {
-            throw new ConflictException("SKU already exists: " + request.getSku());
+    @Transactional(readOnly = true)
+    public Map<String, ProductResponse> getActiveProductsBySkus(Collection<String> skus) {
+        if (skus == null || skus.isEmpty()) {
+            return Map.of();
         }
 
+        List<String> skuList = skus.stream()
+                .filter(s -> s != null && !s.isBlank())
+                .distinct()
+                .collect(Collectors.toList());
+
+        if (skuList.isEmpty()) {
+            return Map.of();
+        }
+
+        List<Product> products = productRepository.findBySkuInAndDeletedAtIsNullAndIsActiveTrue(skuList);
+        Map<String, ProductResponse> result = new HashMap<>();
+
+        for (Product product : products) {
+            ProductResponse response = toResponse(product);
+            for (ProductVariant variant : product.getVariants()) {
+                if (variant.getDeletedAt() == null
+                        && Boolean.TRUE.equals(variant.getIsActive())
+                        && skuList.contains(variant.getSku())) {
+                    result.putIfAbsent(variant.getSku(), response);
+                }
+            }
+        }
+
+        return result;
+    }
+
+    @Override
+    @Transactional
+    public ProductResponse create(ProductRequest request) {
         Category category = categoryRepository.findById(request.getCategoryId())
                 .orElseThrow(() -> new ResourceNotFoundException("Category", request.getCategoryId()));
+
+        if (!category.isLeaf()) {
+            throw new com.ecommerce.nivora.exception.BadRequestException("Sản phẩm chỉ có thể thuộc về danh mục lá (leaf category)");
+        }
+
+        if (request.getVariants() == null || request.getVariants().isEmpty()) {
+            throw new com.ecommerce.nivora.exception.BadRequestException("Sản phẩm phải có ít nhất một phiên bản (variant)");
+        }
 
         String slug = slugUtils.uniqueSlug(request.getName(), productRepository::existsBySlug);
 
@@ -129,11 +200,6 @@ public class ProductServiceImpl implements ProductService {
                 .shortDescription(request.getShortDescription())
                 .description(request.getDescription())
                 .brand(request.getBrand())
-                .sku(request.getSku())
-                .stock(request.getStock() != null ? request.getStock() : 0)
-                .basePrice(request.getBasePrice())
-                .comparePrice(request.getComparePrice())
-                .costPrice(request.getCostPrice())
                 .taxRate(request.getTaxRate() != null ? request.getTaxRate() : BigDecimal.ZERO)
                 .weight(request.getWeight())
                 .isActive(request.getIsActive())
@@ -142,11 +208,13 @@ public class ProductServiceImpl implements ProductService {
                 .isBestSeller(request.getIsBestSeller())
                 .seoTitle(request.getSeoTitle())
                 .seoDescription(request.getSeoDescription())
+                .imageUrl(request.getImageUrl())
+                .attributes(request.getAttributes() != null ? request.getAttributes() : "{}")
                 .build();
 
         // Images
+        List<ProductImage> images = new ArrayList<>();
         if (request.getImageUrls() != null) {
-            List<ProductImage> images = new ArrayList<>();
             for (int i = 0; i < request.getImageUrls().size(); i++) {
                 images.add(ProductImage.builder()
                         .product(product)
@@ -155,65 +223,56 @@ public class ProductServiceImpl implements ProductService {
                         .isPrimary(i == 0)
                         .build());
             }
-            product.setImages(images);
         }
 
         // Variants
         List<ProductVariant> variants = new ArrayList<>();
-        if (request.getSku() != null && !request.getSku().isBlank()) {
-            boolean skuExists = request.getVariants() != null
-                    && request.getVariants().stream().anyMatch(v -> request.getSku().equalsIgnoreCase(v.getSku()));
-            if (!skuExists && variantRepository.existsBySku(request.getSku())) {
-                throw new ConflictException("Variant SKU already exists: " + request.getSku());
+        int sort = 0;
+        for (ProductRequest.VariantRequest vr : request.getVariants()) {
+            if (variantRepository.existsBySku(vr.getSku())) {
+                throw new ConflictException("Variant SKU already exists: " + vr.getSku());
             }
-            ProductVariant defaultVariant = ProductVariant.builder()
+            ProductVariant variant = ProductVariant.builder()
                     .product(product)
-                    .sku(request.getSku())
-                    .name(request.getName())
-                    .price(request.getBasePrice())
-                    .comparePrice(request.getComparePrice())
-                    .attributes("{}")
-                    .imageUrl(request.getImageUrls() != null && !request.getImageUrls().isEmpty()
-                            ? request.getImageUrls().get(0)
-                            : null)
-                    .isActive(request.getIsActive())
-                    .sortOrder(0)
+                    .sku(vr.getSku())
+                    .name(vr.getName())
+                    .price(vr.getPrice())
+                    .comparePrice(vr.getComparePrice())
+                    .color(vr.getColor())
+                    .size(vr.getSize())
+                    .attributes(vr.getAttributes() != null ? vr.getAttributes() : "{}")
+                    .imageUrl(vr.getImageUrl())
+                    .isActive(vr.getIsActive())
+                    .sortOrder(sort++)
                     .build();
-            Inventory inv = Inventory.builder()
-                    .variant(defaultVariant)
-                    .quantity(request.getStock() != null ? request.getStock() : 0)
-                    .build();
-            defaultVariant.setInventory(inv);
-            variants.add(defaultVariant);
-        }
-        if (request.getVariants() != null) {
-            int sort = variants.size();
-            for (ProductRequest.VariantRequest vr : request.getVariants()) {
-                if (request.getSku() != null && request.getSku().equalsIgnoreCase(vr.getSku()))
-                    continue;
-                if (variantRepository.existsBySku(vr.getSku())) {
-                    throw new ConflictException("Variant SKU already exists: " + vr.getSku());
-                }
-                ProductVariant variant = ProductVariant.builder()
-                        .product(product)
-                        .sku(vr.getSku())
-                        .name(vr.getName())
-                        .price(vr.getPrice())
-                        .comparePrice(vr.getComparePrice())
-                        .attributes(vr.getAttributes() != null ? vr.getAttributes() : "{}")
-                        .imageUrl(vr.getImageUrl())
-                        .isActive(vr.getIsActive())
-                        .sortOrder(sort++)
-                        .build();
 
-                Inventory inventory = Inventory.builder()
-                        .variant(variant)
-                        .quantity(vr.getStock() != null ? vr.getStock() : 0)
-                        .build();
-                variant.setInventory(inventory);
-                variants.add(variant);
+            Inventory inventory = Inventory.builder()
+                    .variant(variant)
+                    .quantity(vr.getStock() != null ? vr.getStock() : 0)
+                    .build();
+            variant.setInventory(inventory);
+            variants.add(variant);
+
+            // Optional: Support variant_id in product_images (link to existing image if duplicate)
+            if (vr.getImageUrl() != null && !vr.getImageUrl().isBlank()) {
+                ProductImage existingImg = images.stream()
+                        .filter(img -> img.getUrl().equals(vr.getImageUrl()))
+                        .findFirst()
+                        .orElse(null);
+                if (existingImg != null) {
+                    existingImg.setVariant(variant);
+                } else {
+                    images.add(ProductImage.builder()
+                            .product(product)
+                            .variant(variant)
+                            .url(vr.getImageUrl())
+                            .sortOrder(sort)
+                            .isPrimary(false)
+                            .build());
+                }
             }
         }
+        product.setImages(images);
         product.setVariants(variants);
 
         productRepository.save(product);
@@ -229,16 +288,15 @@ public class ProductServiceImpl implements ProductService {
         Category category = categoryRepository.findById(request.getCategoryId())
                 .orElseThrow(() -> new ResourceNotFoundException("Category", request.getCategoryId()));
 
+        if (!category.isLeaf()) {
+            throw new com.ecommerce.nivora.exception.BadRequestException("Sản phẩm chỉ có thể thuộc về danh mục lá (leaf category)");
+        }
+
         product.setCategory(category);
         product.setName(request.getName());
         product.setShortDescription(request.getShortDescription());
         product.setDescription(request.getDescription());
         product.setBrand(request.getBrand());
-        product.setSku(request.getSku());
-        product.setStock(request.getStock() != null ? request.getStock() : product.getStock());
-        product.setBasePrice(request.getBasePrice());
-        product.setComparePrice(request.getComparePrice());
-        product.setCostPrice(request.getCostPrice());
         product.setTaxRate(request.getTaxRate() != null ? request.getTaxRate() : BigDecimal.ZERO);
         product.setWeight(request.getWeight());
         product.setSeoTitle(request.getSeoTitle());
@@ -247,6 +305,10 @@ public class ProductServiceImpl implements ProductService {
         product.setIsFeatured(request.getIsFeatured());
         product.setIsNew(request.getIsNew());
         product.setIsBestSeller(request.getIsBestSeller());
+        product.setImageUrl(request.getImageUrl());
+        if (request.getAttributes() != null) {
+            product.setAttributes(request.getAttributes());
+        }
 
         if (request.getImageUrls() != null) {
             product.getImages().clear();
@@ -260,6 +322,102 @@ public class ProductServiceImpl implements ProductService {
                         .build());
             }
             product.getImages().addAll(images);
+        }
+
+        // Update Variants
+        if (request.getVariants() != null && !request.getVariants().isEmpty()) {
+            java.util.Map<String, ProductVariant> existingVariants = product.getVariants().stream()
+                    .collect(Collectors.toMap(ProductVariant::getSku, v -> v));
+
+            List<ProductVariant> updatedVariants = new ArrayList<>();
+            int sort = 0;
+            for (ProductRequest.VariantRequest vr : request.getVariants()) {
+                ProductVariant variant = existingVariants.get(vr.getSku());
+                if (variant != null) {
+                    // Update existing variant
+                    variant.setName(vr.getName());
+                    variant.setPrice(vr.getPrice());
+                    variant.setComparePrice(vr.getComparePrice());
+                    variant.setColor(vr.getColor());
+                    variant.setSize(vr.getSize());
+                    variant.setIsActive(vr.getIsActive());
+                    variant.setSortOrder(sort++);
+                    if (vr.getAttributes() != null) {
+                        variant.setAttributes(vr.getAttributes());
+                    }
+                    variant.setImageUrl(vr.getImageUrl());
+                    
+                    // Update inventory
+                    if (variant.getInventory() != null) {
+                        variant.getInventory().setQuantity(vr.getStock() != null ? vr.getStock() : 0);
+                    } else {
+                        Inventory inventory = Inventory.builder()
+                                .variant(variant)
+                                .quantity(vr.getStock() != null ? vr.getStock() : 0)
+                                .build();
+                        variant.setInventory(inventory);
+                    }
+                    updatedVariants.add(variant);
+                    existingVariants.remove(vr.getSku());
+                } else {
+                    // Create new variant
+                    if (variantRepository.existsBySku(vr.getSku())) {
+                        throw new ConflictException("Variant SKU already exists: " + vr.getSku());
+                    }
+                    ProductVariant newVariant = ProductVariant.builder()
+                            .product(product)
+                            .sku(vr.getSku())
+                            .name(vr.getName())
+                            .price(vr.getPrice())
+                            .comparePrice(vr.getComparePrice())
+                            .color(vr.getColor())
+                            .size(vr.getSize())
+                            .attributes(vr.getAttributes() != null ? vr.getAttributes() : "{}")
+                            .imageUrl(vr.getImageUrl())
+                            .isActive(vr.getIsActive())
+                            .sortOrder(sort++)
+                            .build();
+
+                    Inventory inventory = Inventory.builder()
+                            .variant(newVariant)
+                            .quantity(vr.getStock() != null ? vr.getStock() : 0)
+                            .build();
+                    newVariant.setInventory(inventory);
+                    updatedVariants.add(newVariant);
+                }
+            }
+
+            // Remove/Delete variants that are no longer in the request
+            for (ProductVariant oldVariant : existingVariants.values()) {
+                if (oldVariant.getInventory() != null) {
+                    inventoryRepository.delete(oldVariant.getInventory());
+                }
+                variantRepository.delete(oldVariant);
+            }
+
+            product.getVariants().clear();
+            product.getVariants().addAll(updatedVariants);
+
+            // Re-sync variant images to product.getImages() (link to existing image if duplicate)
+            for (ProductVariant v : updatedVariants) {
+                if (v.getImageUrl() != null && !v.getImageUrl().isBlank()) {
+                    ProductImage existingImg = product.getImages().stream()
+                            .filter(img -> img.getUrl().equals(v.getImageUrl()))
+                            .findFirst()
+                            .orElse(null);
+                    if (existingImg != null) {
+                        existingImg.setVariant(v);
+                    } else {
+                        product.getImages().add(ProductImage.builder()
+                                .product(product)
+                                .variant(v)
+                                .url(v.getImageUrl())
+                                .sortOrder(product.getImages().size())
+                                .isPrimary(false)
+                                .build());
+                    }
+                }
+            }
         }
 
         productRepository.save(product);
@@ -332,6 +490,17 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProductVariantResponse> getVariants(Long productId) {
+        Product product = productRepository.findByIdAndDeletedAtIsNull(productId)
+                .orElseThrow(() -> new ResourceNotFoundException("Product", productId));
+        return product.getVariants().stream()
+                .filter(v -> v.getDeletedAt() == null)
+                .map(this::toVariantResponse)
+                .collect(Collectors.toList());
+    }
+
     // ── Mapper ───────────────────────────────────────────
 
     private ProductResponse toResponse(Product p) {
@@ -356,6 +525,7 @@ public class ProductServiceImpl implements ProductService {
                 .isBestSeller(p.getIsBestSeller())
                 .ratingAvg(p.getRatingAvg())
                 .ratingCount(p.getRatingCount())
+                .imageUrl(p.getImageUrl())
                 .category(p.getCategory() != null ? toCategoryResponse(p.getCategory()) : null)
                 .images(p.getImages().stream().map(this::toImageResponse).collect(Collectors.toList()))
                 .variants(p.getVariants().stream().map(this::toVariantResponse).collect(Collectors.toList()))
@@ -375,6 +545,7 @@ public class ProductServiceImpl implements ProductService {
         return ProductImageResponse.builder()
                 .id(img.getId()).url(img.getUrl()).altText(img.getAltText())
                 .sortOrder(img.getSortOrder()).isPrimary(img.getIsPrimary())
+                .variantId(img.getVariant() != null ? img.getVariant().getId() : null)
                 .build();
     }
 
@@ -387,6 +558,7 @@ public class ProductServiceImpl implements ProductService {
         return ProductVariantResponse.builder()
                 .id(v.getId()).sku(v.getSku()).name(v.getName())
                 .price(v.getPrice()).comparePrice(v.getComparePrice())
+                .color(v.getColor()).size(v.getSize())
                 .attributes(v.getAttributes()).imageUrl(v.getImageUrl())
                 .isActive(v.getIsActive()).sortOrder(v.getSortOrder())
                 .stock(stock).availableStock(available)
