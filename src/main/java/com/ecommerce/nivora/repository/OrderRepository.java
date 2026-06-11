@@ -39,4 +39,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
            "GROUP BY oi.productName " +
            "ORDER BY SUM(oi.quantity) DESC")
     List<Object[]> getTopSellingProducts(Pageable pageable);
+
+    @Query("SELECT DISTINCT oi.product.uuid FROM Order o JOIN o.items oi WHERE o.user.id = :userId AND o.status <> 'CANCELLED'")
+    List<String> findPurchasedProductUuidsByUserId(@Param("userId") Long userId);
 }
