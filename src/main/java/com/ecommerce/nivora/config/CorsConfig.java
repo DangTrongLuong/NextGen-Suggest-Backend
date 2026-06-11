@@ -21,19 +21,18 @@ public class CorsConfig {
 
         // Cho phép frontend origin (từ .env: http://localhost:5173)
         config.setAllowedOrigins(List.of(
-            frontendUrl,
-            "http://localhost:5173",
-            "http://127.0.0.1:5173"
-        ));
+                frontendUrl,
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+                "https://datn-nextgen-suggest.site"));
 
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         config.setAllowedHeaders(List.of(
-            "Authorization",
-            "Content-Type",
-            "Accept",
-            "Origin",
-            "X-Requested-With"
-        ));
+                "Authorization",
+                "Content-Type",
+                "Accept",
+                "Origin",
+                "X-Requested-With"));
         config.setExposedHeaders(List.of("Authorization"));
         config.setAllowCredentials(true);
         config.setMaxAge(3600L);

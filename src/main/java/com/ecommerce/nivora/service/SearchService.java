@@ -7,4 +7,5 @@ import java.util.List;
 public interface SearchService {
     List<ProductResponse> search(String query, boolean rerank, int topK);
     PageResponse<ProductResponse> searchPaginated(String query, boolean rerank, int page, int size);
+    List<String> getTopSearchKeywords(int limit);
 }

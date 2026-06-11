@@ -16,6 +16,16 @@ import java.util.*;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import com.ecommerce.nivora.entity.SearchLog;
+import com.ecommerce.nivora.entity.User;
+import com.ecommerce.nivora.repository.SearchLogRepository;
+import com.ecommerce.nivora.repository.UserRepository;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -23,6 +33,8 @@ public class SearchServiceImpl implements SearchService {
 
     private final RestTemplate restTemplate;
     private final ProductService productService;
+    private final SearchLogRepository searchLogRepository;
+    private final UserRepository userRepository;
 
     private static final Pattern SLUG_PATTERN = Pattern.compile("[^a-z0-9]+");
 
@@ -35,6 +47,7 @@ public class SearchServiceImpl implements SearchService {
             return Collections.emptyList();
         }
 
+        long startTime = System.currentTimeMillis();
         int safeTopK = Math.min(Math.max(topK, 1), 150);
         int candidateK = rerank ? Math.min(Math.max((int) (safeTopK * 1.5), 15), 200) : safeTopK;
 
@@ -54,6 +67,7 @@ public class SearchServiceImpl implements SearchService {
 
             if (apiResponse == null || apiResponse.getResults() == null || apiResponse.getResults().isEmpty()) {
                 log.info("No semantic search results returned from FastAPI for query: {}", query);
+                logSearch(query, 0, (int) (System.currentTimeMillis() - startTime));
                 return Collections.emptyList();
             }
 
@@ -65,15 +79,19 @@ public class SearchServiceImpl implements SearchService {
             Map<String, ProductResponse> dbProductsBySku = productService.getActiveProductsBySkus(skus);
             log.info("Hydrated {}/{} semantic results from database", dbProductsBySku.size(), skus.size());
 
-            return apiResponse.getResults().stream()
+            List<ProductResponse> results = apiResponse.getResults().stream()
                     .map(res -> {
                         ProductResponse dbProduct = dbProductsBySku.get(res.getProductId());
                         return dbProduct != null ? dbProduct : mapFromFastApi(res);
                     })
                     .collect(Collectors.toList());
 
+            logSearch(query, results.size(), (int) (System.currentTimeMillis() - startTime));
+            return results;
+
         } catch (Exception e) {
             log.error("Failed to perform semantic search via FastAPI", e);
+            logSearch(query, 0, (int) (System.currentTimeMillis() - startTime));
             return Collections.emptyList();
         }
     }
@@ -91,6 +109,7 @@ public class SearchServiceImpl implements SearchService {
                     .build();
         }
 
+        long startTime = System.currentTimeMillis();
         try {
             // Only pass page and size — FastAPI handles candidate fetch and reranking internally.
             String targetUrl = UriComponentsBuilder.fromHttpUrl(fastApiUrl)
@@ -108,6 +127,7 @@ public class SearchServiceImpl implements SearchService {
 
             if (apiResponse == null || apiResponse.getResults() == null || apiResponse.getResults().isEmpty()) {
                 log.info("No semantic search results returned from FastAPI for paginated query: {}", query);
+                logSearch(query, 0, (int) (System.currentTimeMillis() - startTime));
                 return PageResponse.<ProductResponse>builder()
                         .content(Collections.emptyList())
                         .page(page)
@@ -147,6 +167,7 @@ public class SearchServiceImpl implements SearchService {
                     })
                     .collect(Collectors.toList());
 
+            logSearch(query, content.size(), (int) (System.currentTimeMillis() - startTime));
             return PageResponse.<ProductResponse>builder()
                     .content(content)
                     .page(page)
@@ -158,6 +179,7 @@ public class SearchServiceImpl implements SearchService {
 
         } catch (Exception e) {
             log.error("Failed to perform paginated semantic search via FastAPI", e);
+            logSearch(query, 0, (int) (System.currentTimeMillis() - startTime));
             return PageResponse.<ProductResponse>builder()
                     .content(Collections.emptyList())
                     .page(page)
@@ -166,6 +188,58 @@ public class SearchServiceImpl implements SearchService {
                     .totalPages(0)
                     .last(true)
                     .build();
+        }
+    }
+
+    @Override
+    public List<String> getTopSearchKeywords(int limit) {
+        try {
+            int safeLimit = Math.max(1, limit);
+            List<Object[]> topQueries = searchLogRepository.findTopQueries(PageRequest.of(0, safeLimit));
+            if (topQueries == null) {
+                return Collections.emptyList();
+            }
+            return topQueries.stream()
+                    .map(row -> row != null && row.length > 0 && row[0] != null ? row[0].toString().trim() : null)
+                    .filter(q -> q != null && !q.isEmpty())
+                    .collect(Collectors.toList());
+        } catch (Exception e) {
+            log.error("Failed to fetch top search keywords", e);
+            return Collections.emptyList();
+        }
+    }
+
+    private void logSearch(String query, int resultsCount, int latencyMs) {
+        try {
+            String sessionId = "system-session-unknown";
+            try {
+                ServletRequestAttributes attr = (ServletRequestAttributes) RequestContextHolder.currentRequestAttributes();
+                if (attr != null && attr.getRequest() != null && attr.getRequest().getSession(false) != null) {
+                    sessionId = attr.getRequest().getSession(false).getId();
+                } else if (attr != null && attr.getRequest() != null) {
+                    sessionId = attr.getRequest().getSession(true).getId();
+                }
+            } catch (Exception e) {
+                // Context attributes not available (e.g. background task)
+            }
+
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            User user = null;
+            if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
+                user = userRepository.findActiveByEmail(auth.getName()).orElse(null);
+            }
+
+            SearchLog searchLog = SearchLog.builder()
+                    .sessionId(sessionId)
+                    .user(user)
+                    .queryText(query)
+                    .resultsCount(resultsCount)
+                    .latencyMs(latencyMs)
+                    .build();
+
+            searchLogRepository.save(searchLog);
+        } catch (Exception e) {
+            log.error("Failed to log search query to MySQL", e);
         }
     }
 

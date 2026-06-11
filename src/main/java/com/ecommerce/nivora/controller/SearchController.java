@@ -42,4 +42,13 @@ public class SearchController {
         PageResponse<ProductResponse> results = searchService.searchPaginated(query, rerank, page, size);
         return ResponseEntity.ok(ApiResponse.success(results));
     }
+
+    @GetMapping("/popular")
+    @Operation(summary = "Get most popular search keywords")
+    public ResponseEntity<ApiResponse<List<String>>> getPopularSearches(
+            @RequestParam(value = "limit", defaultValue = "5") int limit
+    ) {
+        List<String> results = searchService.getTopSearchKeywords(limit);
+        return ResponseEntity.ok(ApiResponse.success(results));
+    }
 }

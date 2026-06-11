@@ -23,6 +23,7 @@ public interface ProductService {
     List<ProductResponse> getBestSellers();
     List<ProductResponse> getNewArrivals();
     List<ProductResponse> getRelated(Long productId, int limit);
+    List<ProductResponse> getProductsByIds(List<Long> ids);
     Map<String, ProductResponse> getActiveProductsBySkus(Collection<String> skus);
     ProductResponse create(ProductRequest request);
     ProductResponse update(Long id, ProductRequest request);

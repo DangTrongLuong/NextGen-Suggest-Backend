@@ -146,6 +146,18 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<ProductResponse> getProductsByIds(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        return productRepository.findAllById(ids).stream()
+                .filter(p -> p.getDeletedAt() == null && Boolean.TRUE.equals(p.getIsActive()))
+                .map(this::toResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Map<String, ProductResponse> getActiveProductsBySkus(Collection<String> skus) {
         if (skus == null || skus.isEmpty()) {
             return Map.of();
