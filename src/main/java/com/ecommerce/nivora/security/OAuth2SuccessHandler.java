@@ -1,10 +1,12 @@
 package com.ecommerce.nivora.security;
 
-import com.ecommerce.nivora.entity.Role;
-import com.ecommerce.nivora.entity.User;
-import com.ecommerce.nivora.repository.RoleRepository;
-import com.ecommerce.nivora.repository.UserRepository;
-import com.ecommerce.nivora.utils.JwtUtils;
+import com.ecommerce.nivora.security.utils.JwtUtils;
+import com.ecommerce.nivora.user.entity.Role;
+import com.ecommerce.nivora.user.entity.User;
+import com.ecommerce.nivora.user.repository.RoleRepository;
+import com.ecommerce.nivora.user.repository.UserRepository;
+
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;

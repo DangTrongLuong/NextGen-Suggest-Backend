@@ -1,7 +1,9 @@
 package com.ecommerce.nivora.config;
 
-import com.ecommerce.nivora.entity.Role;
-import com.ecommerce.nivora.repository.RoleRepository;
+import com.ecommerce.nivora.user.entity.Role;
+import com.ecommerce.nivora.user.repository.RoleRepository;
+
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;

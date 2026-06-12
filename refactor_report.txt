@@ -1,0 +1,710 @@
+=== REFACTOR REPORT: LAYER-BASED TO FEATURE-BASED ===
+
+Total files refactored: 141
+
+Moved Files & Package Changes:
+- AdminCategoryController.java
+  Old package: com.ecommerce.nivora.controller.admin
+  New package: com.ecommerce.nivora.admin.controller
+  New file path: src\main\java\com\ecommerce\nivora\admin\controller\AdminCategoryController.java
+
+- AdminDashboardController.java
+  Old package: com.ecommerce.nivora.controller.admin
+  New package: com.ecommerce.nivora.admin.controller
+  New file path: src\main\java\com\ecommerce\nivora\admin\controller\AdminDashboardController.java
+
+- AdminOrderController.java
+  Old package: com.ecommerce.nivora.controller.admin
+  New package: com.ecommerce.nivora.admin.controller
+  New file path: src\main\java\com\ecommerce\nivora\admin\controller\AdminOrderController.java
+
+- AdminProductController.java
+  Old package: com.ecommerce.nivora.controller.admin
+  New package: com.ecommerce.nivora.admin.controller
+  New file path: src\main\java\com\ecommerce\nivora\admin\controller\AdminProductController.java
+
+- AdminUserController.java
+  Old package: com.ecommerce.nivora.controller.admin
+  New package: com.ecommerce.nivora.admin.controller
+  New file path: src\main\java\com\ecommerce\nivora\admin\controller\AdminUserController.java
+
+- AdminUserResponse.java
+  Old package: com.ecommerce.nivora.dto.response
+  New package: com.ecommerce.nivora.admin.dto.response
+  New file path: src\main\java\com\ecommerce\nivora\admin\dto\response\AdminUserResponse.java
+
+- AdminUserService.java
+  Old package: com.ecommerce.nivora.service
+  New package: com.ecommerce.nivora.admin.service
+  New file path: src\main\java\com\ecommerce\nivora\admin\service\AdminUserService.java
+
+- AdminUserServiceImpl.java
+  Old package: com.ecommerce.nivora.service.impl
+  New package: com.ecommerce.nivora.admin.service
+  New file path: src\main\java\com\ecommerce\nivora\admin\service\AdminUserServiceImpl.java
+
+- ApiResponse.java
+  Old package: com.ecommerce.nivora.common
+  New package: com.ecommerce.nivora.common.dto.response
+  New file path: src\main\java\com\ecommerce\nivora\common\dto\response\ApiResponse.java
+
+- AuthController.java
+  Old package: com.ecommerce.nivora.controller
+  New package: com.ecommerce.nivora.auth.controller
+  New file path: src\main\java\com\ecommerce\nivora\auth\controller\AuthController.java
+
+- AuthResponse.java
+  Old package: com.ecommerce.nivora.dto.response
+  New package: com.ecommerce.nivora.auth.dto.response
+  New file path: src\main\java\com\ecommerce\nivora\auth\dto\response\AuthResponse.java
+
+- AuthService.java
+  Old package: com.ecommerce.nivora.service
+  New package: com.ecommerce.nivora.auth.service
+  New file path: src\main\java\com\ecommerce\nivora\auth\service\AuthService.java
+
+- AuthServiceImpl.java
+  Old package: com.ecommerce.nivora.service.impl
+  New package: com.ecommerce.nivora.auth.service
+  New file path: src\main\java\com\ecommerce\nivora\auth\service\AuthServiceImpl.java
+
+- BadRequestException.java
+  Old package: com.ecommerce.nivora.exception
+  New package: com.ecommerce.nivora.exception.dto.request
+  New file path: src\main\java\com\ecommerce\nivora\exception\dto\request\BadRequestException.java
+
+- Cart.java
+  Old package: com.ecommerce.nivora.entity
+  New package: com.ecommerce.nivora.cart.entity
+  New file path: src\main\java\com\ecommerce\nivora\cart\entity\Cart.java
+
+- CartController.java
+  Old package: com.ecommerce.nivora.controller
+  New package: com.ecommerce.nivora.cart.controller
+  New file path: src\main\java\com\ecommerce\nivora\cart\controller\CartController.java
+
+- CartItem.java
+  Old package: com.ecommerce.nivora.entity
+  New package: com.ecommerce.nivora.cart.entity
+  New file path: src\main\java\com\ecommerce\nivora\cart\entity\CartItem.java
+
+- CartItemRepository.java
+  Old package: com.ecommerce.nivora.repository
+  New package: com.ecommerce.nivora.cart.repository
+  New file path: src\main\java\com\ecommerce\nivora\cart\repository\CartItemRepository.java
+
+- CartItemRequest.java
+  Old package: com.ecommerce.nivora.dto.request
+  New package: com.ecommerce.nivora.cart.dto.request
+  New file path: src\main\java\com\ecommerce\nivora\cart\dto\request\CartItemRequest.java
+
+- CartItemResponse.java
+  Old package: com.ecommerce.nivora.dto.response
+  New package: com.ecommerce.nivora.cart.dto.response
+  New file path: src\main\java\com\ecommerce\nivora\cart\dto\response\CartItemResponse.java
+
+- CartRepository.java
+  Old package: com.ecommerce.nivora.repository
+  New package: com.ecommerce.nivora.cart.repository
+  New file path: src\main\java\com\ecommerce\nivora\cart\repository\CartRepository.java
+
+- CartResponse.java
+  Old package: com.ecommerce.nivora.dto.response
+  New package: com.ecommerce.nivora.cart.dto.response
+  New file path: src\main\java\com\ecommerce\nivora\cart\dto\response\CartResponse.java
+
+- CartService.java
+  Old package: com.ecommerce.nivora.service
+  New package: com.ecommerce.nivora.cart.service
+  New file path: src\main\java\com\ecommerce\nivora\cart\service\CartService.java
+
+- CartServiceImpl.java
+  Old package: com.ecommerce.nivora.service.impl
+  New package: com.ecommerce.nivora.cart.service
+  New file path: src\main\java\com\ecommerce\nivora\cart\service\CartServiceImpl.java
+
+- Category.java
+  Old package: com.ecommerce.nivora.entity
+  New package: com.ecommerce.nivora.category.entity
+  New file path: src\main\java\com\ecommerce\nivora\category\entity\Category.java
+
+- CategoryController.java
+  Old package: com.ecommerce.nivora.controller
+  New package: com.ecommerce.nivora.category.controller
+  New file path: src\main\java\com\ecommerce\nivora\category\controller\CategoryController.java
+
+- CategoryRepository.java
+  Old package: com.ecommerce.nivora.repository
+  New package: com.ecommerce.nivora.category.repository
+  New file path: src\main\java\com\ecommerce\nivora\category\repository\CategoryRepository.java
+
+- CategoryRequest.java
+  Old package: com.ecommerce.nivora.dto.request
+  New package: com.ecommerce.nivora.category.dto.request
+  New file path: src\main\java\com\ecommerce\nivora\category\dto\request\CategoryRequest.java
+
+- CategoryResponse.java
+  Old package: com.ecommerce.nivora.dto.response
+  New package: com.ecommerce.nivora.category.dto.response
+  New file path: src\main\java\com\ecommerce\nivora\category\dto\response\CategoryResponse.java
+
+- CategoryService.java
+  Old package: com.ecommerce.nivora.service
+  New package: com.ecommerce.nivora.category.service
+  New file path: src\main\java\com\ecommerce\nivora\category\service\CategoryService.java
+
+- CategoryServiceImpl.java
+  Old package: com.ecommerce.nivora.service.impl
+  New package: com.ecommerce.nivora.category.service
+  New file path: src\main\java\com\ecommerce\nivora\category\service\CategoryServiceImpl.java
+
+- ChatController.java
+  Old package: com.ecommerce.nivora.controller
+  New package: com.ecommerce.nivora.chat.controller
+  New file path: src\main\java\com\ecommerce\nivora\chat\controller\ChatController.java
+
+- ChatMessageRequest.java
+  Old package: com.ecommerce.nivora.dto.request
+  New package: com.ecommerce.nivora.chat.dto.request
+  New file path: src\main\java\com\ecommerce\nivora\chat\dto\request\ChatMessageRequest.java
+
+- ChatRequest.java
+  Old package: com.ecommerce.nivora.dto.request
+  New package: com.ecommerce.nivora.chat.dto.request
+  New file path: src\main\java\com\ecommerce\nivora\chat\dto\request\ChatRequest.java
+
+- ChatResponse.java
+  Old package: com.ecommerce.nivora.dto.response
+  New package: com.ecommerce.nivora.chat.dto.response
+  New file path: src\main\java\com\ecommerce\nivora\chat\dto\response\ChatResponse.java
+
+- ChatService.java
+  Old package: com.ecommerce.nivora.service
+  New package: com.ecommerce.nivora.chat.service
+  New file path: src\main\java\com\ecommerce\nivora\chat\service\ChatService.java
+
+- ChatServiceImpl.java
+  Old package: com.ecommerce.nivora.service.impl
+  New package: com.ecommerce.nivora.chat.service
+  New file path: src\main\java\com\ecommerce\nivora\chat\service\ChatServiceImpl.java
+
+- CheckoutRequest.java
+  Old package: com.ecommerce.nivora.dto.request
+  New package: com.ecommerce.nivora.order.dto.request
+  New file path: src\main\java\com\ecommerce\nivora\order\dto\request\CheckoutRequest.java
+
+- CloudinaryConfig.java
+  Old package: com.ecommerce.nivora.config
+  New package: com.ecommerce.nivora.config
+  New file path: src\main\java\com\ecommerce\nivora\config\CloudinaryConfig.java
+
+- ConflictException.java
+  Old package: com.ecommerce.nivora.exception
+  New package: com.ecommerce.nivora.exception
+  New file path: src\main\java\com\ecommerce\nivora\exception\ConflictException.java
+
+- CorsConfig.java
+  Old package: com.ecommerce.nivora.config
+  New package: com.ecommerce.nivora.config
+  New file path: src\main\java\com\ecommerce\nivora\config\CorsConfig.java
+
+- DashboardResponse.java
+  Old package: com.ecommerce.nivora.dto.response
+  New package: com.ecommerce.nivora.dashboard.dto.response
+  New file path: src\main\java\com\ecommerce\nivora\dashboard\dto\response\DashboardResponse.java
+
+- DashboardService.java
+  Old package: com.ecommerce.nivora.service
+  New package: com.ecommerce.nivora.dashboard.service
+  New file path: src\main\java\com\ecommerce\nivora\dashboard\service\DashboardService.java
+
+- DashboardServiceImpl.java
+  Old package: com.ecommerce.nivora.service.impl
+  New package: com.ecommerce.nivora.dashboard.service
+  New file path: src\main\java\com\ecommerce\nivora\dashboard\service\DashboardServiceImpl.java
+
+- DataInitializer.java
+  Old package: com.ecommerce.nivora.config
+  New package: com.ecommerce.nivora.config
+  New file path: src\main\java\com\ecommerce\nivora\config\DataInitializer.java
+
+- EventController.java
+  Old package: com.ecommerce.nivora.controller
+  New package: com.ecommerce.nivora.event.controller
+  New file path: src\main\java\com\ecommerce\nivora\event\controller\EventController.java
+
+- FastApiChatResponse.java
+  Old package: com.ecommerce.nivora.dto.response
+  New package: com.ecommerce.nivora.chat.dto.response
+  New file path: src\main\java\com\ecommerce\nivora\chat\dto\response\FastApiChatResponse.java
+
+- FastApiHybridRecommendRequest.java
+  Old package: com.ecommerce.nivora.dto.request
+  New package: com.ecommerce.nivora.recommendation.dto.request
+  New file path: src\main\java\com\ecommerce\nivora\recommendation\dto\request\FastApiHybridRecommendRequest.java
+
+- FastApiProductResult.java
+  Old package: com.ecommerce.nivora.dto.response
+  New package: com.ecommerce.nivora.recommendation
+  New file path: src\main\java\com\ecommerce\nivora\recommendation\FastApiProductResult.java
+
+- FastApiRecommendResponse.java
+  Old package: com.ecommerce.nivora.dto.response
+  New package: com.ecommerce.nivora.recommendation.dto.response
+  New file path: src\main\java\com\ecommerce\nivora\recommendation\dto\response\FastApiRecommendResponse.java
+
+- FastApiSearchResponse.java
+  Old package: com.ecommerce.nivora.dto.response
+  New package: com.ecommerce.nivora.search.dto.response
+  New file path: src\main\java\com\ecommerce\nivora\search\dto\response\FastApiSearchResponse.java
+
+- GlobalExceptionHandler.java
+  Old package: com.ecommerce.nivora.exception
+  New package: com.ecommerce.nivora.exception
+  New file path: src\main\java\com\ecommerce\nivora\exception\GlobalExceptionHandler.java
+
+- HomepageRecommendationResponse.java
+  Old package: com.ecommerce.nivora.dto.response
+  New package: com.ecommerce.nivora.recommendation.dto.response
+  New file path: src\main\java\com\ecommerce\nivora\recommendation\dto\response\HomepageRecommendationResponse.java
+
+- HttpClientConfig.java
+  Old package: com.ecommerce.nivora.config
+  New package: com.ecommerce.nivora.config
+  New file path: src\main\java\com\ecommerce\nivora\config\HttpClientConfig.java
+
+- Inventory.java
+  Old package: com.ecommerce.nivora.entity
+  New package: com.ecommerce.nivora.product.entity
+  New file path: src\main\java\com\ecommerce\nivora\product\entity\Inventory.java
+
+- InventoryRepository.java
+  Old package: com.ecommerce.nivora.repository
+  New package: com.ecommerce.nivora.product.repository
+  New file path: src\main\java\com\ecommerce\nivora\product\repository\InventoryRepository.java
+
+- JwtAuthFilter.java
+  Old package: com.ecommerce.nivora.security
+  New package: com.ecommerce.nivora.security
+  New file path: src\main\java\com\ecommerce\nivora\security\JwtAuthFilter.java
+
+- JwtUtils.java
+  Old package: com.ecommerce.nivora.utils
+  New package: com.ecommerce.nivora.security.utils
+  New file path: src\main\java\com\ecommerce\nivora\security\utils\JwtUtils.java
+
+- LoginRequest.java
+  Old package: com.ecommerce.nivora.dto.request
+  New package: com.ecommerce.nivora.auth.dto.request
+  New file path: src\main\java\com\ecommerce\nivora\auth\dto\request\LoginRequest.java
+
+- NivoraApplication.java
+  Old package: com.ecommerce.nivora
+  New package: com.ecommerce.nivora
+  New file path: src\main\java\com\ecommerce\nivora\NivoraApplication.java
+
+- NivoraApplicationTests.java
+  Old package: com.ecommerce.nivora
+  New package: com.ecommerce.nivora
+  New file path: src\test\java\com\ecommerce\nivora\NivoraApplicationTests.java
+
+- OAuth2SuccessHandler.java
+  Old package: com.ecommerce.nivora.security
+  New package: com.ecommerce.nivora.security
+  New file path: src\main\java\com\ecommerce\nivora\security\OAuth2SuccessHandler.java
+
+- Order.java
+  Old package: com.ecommerce.nivora.entity
+  New package: com.ecommerce.nivora.order.entity
+  New file path: src\main\java\com\ecommerce\nivora\order\entity\Order.java
+
+- OrderController.java
+  Old package: com.ecommerce.nivora.controller
+  New package: com.ecommerce.nivora.order.controller
+  New file path: src\main\java\com\ecommerce\nivora\order\controller\OrderController.java
+
+- OrderItem.java
+  Old package: com.ecommerce.nivora.entity
+  New package: com.ecommerce.nivora.order.entity
+  New file path: src\main\java\com\ecommerce\nivora\order\entity\OrderItem.java
+
+- OrderItemResponse.java
+  Old package: com.ecommerce.nivora.dto.response
+  New package: com.ecommerce.nivora.order.dto.response
+  New file path: src\main\java\com\ecommerce\nivora\order\dto\response\OrderItemResponse.java
+
+- OrderRepository.java
+  Old package: com.ecommerce.nivora.repository
+  New package: com.ecommerce.nivora.order.repository
+  New file path: src\main\java\com\ecommerce\nivora\order\repository\OrderRepository.java
+
+- OrderResponse.java
+  Old package: com.ecommerce.nivora.dto.response
+  New package: com.ecommerce.nivora.order.dto.response
+  New file path: src\main\java\com\ecommerce\nivora\order\dto\response\OrderResponse.java
+
+- OrderService.java
+  Old package: com.ecommerce.nivora.service
+  New package: com.ecommerce.nivora.order.service
+  New file path: src\main\java\com\ecommerce\nivora\order\service\OrderService.java
+
+- OrderServiceImpl.java
+  Old package: com.ecommerce.nivora.service.impl
+  New package: com.ecommerce.nivora.order.service
+  New file path: src\main\java\com\ecommerce\nivora\order\service\OrderServiceImpl.java
+
+- PageResponse.java
+  Old package: com.ecommerce.nivora.common
+  New package: com.ecommerce.nivora.common.dto.response
+  New file path: src\main\java\com\ecommerce\nivora\common\dto\response\PageResponse.java
+
+- Payment.java
+  Old package: com.ecommerce.nivora.entity
+  New package: com.ecommerce.nivora.payment.entity
+  New file path: src\main\java\com\ecommerce\nivora\payment\entity\Payment.java
+
+- PaymentResponse.java
+  Old package: com.ecommerce.nivora.dto.response
+  New package: com.ecommerce.nivora.payment.dto.response
+  New file path: src\main\java\com\ecommerce\nivora\payment\dto\response\PaymentResponse.java
+
+- Product.java
+  Old package: com.ecommerce.nivora.entity
+  New package: com.ecommerce.nivora.product.entity
+  New file path: src\main\java\com\ecommerce\nivora\product\entity\Product.java
+
+- ProductController.java
+  Old package: com.ecommerce.nivora.controller
+  New package: com.ecommerce.nivora.product.controller
+  New file path: src\main\java\com\ecommerce\nivora\product\controller\ProductController.java
+
+- ProductImage.java
+  Old package: com.ecommerce.nivora.entity
+  New package: com.ecommerce.nivora.product.entity
+  New file path: src\main\java\com\ecommerce\nivora\product\entity\ProductImage.java
+
+- ProductImageRepository.java
+  Old package: com.ecommerce.nivora.repository
+  New package: com.ecommerce.nivora.product.repository
+  New file path: src\main\java\com\ecommerce\nivora\product\repository\ProductImageRepository.java
+
+- ProductImageResponse.java
+  Old package: com.ecommerce.nivora.dto.response
+  New package: com.ecommerce.nivora.product.dto.response
+  New file path: src\main\java\com\ecommerce\nivora\product\dto\response\ProductImageResponse.java
+
+- ProductRepository.java
+  Old package: com.ecommerce.nivora.repository
+  New package: com.ecommerce.nivora.product.repository
+  New file path: src\main\java\com\ecommerce\nivora\product\repository\ProductRepository.java
+
+- ProductRequest.java
+  Old package: com.ecommerce.nivora.dto.request
+  New package: com.ecommerce.nivora.product.dto.request
+  New file path: src\main\java\com\ecommerce\nivora\product\dto\request\ProductRequest.java
+
+- ProductResponse.java
+  Old package: com.ecommerce.nivora.dto.response
+  New package: com.ecommerce.nivora.product.dto.response
+  New file path: src\main\java\com\ecommerce\nivora\product\dto\response\ProductResponse.java
+
+- ProductService.java
+  Old package: com.ecommerce.nivora.service
+  New package: com.ecommerce.nivora.product.service
+  New file path: src\main\java\com\ecommerce\nivora\product\service\ProductService.java
+
+- ProductServiceImpl.java
+  Old package: com.ecommerce.nivora.service.impl
+  New package: com.ecommerce.nivora.product.service
+  New file path: src\main\java\com\ecommerce\nivora\product\service\ProductServiceImpl.java
+
+- ProductVariant.java
+  Old package: com.ecommerce.nivora.entity
+  New package: com.ecommerce.nivora.product.entity
+  New file path: src\main\java\com\ecommerce\nivora\product\entity\ProductVariant.java
+
+- ProductVariantRepository.java
+  Old package: com.ecommerce.nivora.repository
+  New package: com.ecommerce.nivora.product.repository
+  New file path: src\main\java\com\ecommerce\nivora\product\repository\ProductVariantRepository.java
+
+- ProductVariantResponse.java
+  Old package: com.ecommerce.nivora.dto.response
+  New package: com.ecommerce.nivora.product.dto.response
+  New file path: src\main\java\com\ecommerce\nivora\product\dto\response\ProductVariantResponse.java
+
+- RecommendationCache.java
+  Old package: com.ecommerce.nivora.entity
+  New package: com.ecommerce.nivora.recommendation.entity
+  New file path: src\main\java\com\ecommerce\nivora\recommendation\entity\RecommendationCache.java
+
+- RecommendationCacheRepository.java
+  Old package: com.ecommerce.nivora.repository
+  New package: com.ecommerce.nivora.recommendation.repository
+  New file path: src\main\java\com\ecommerce\nivora\recommendation\repository\RecommendationCacheRepository.java
+
+- RecommendationController.java
+  Old package: com.ecommerce.nivora.controller
+  New package: com.ecommerce.nivora.recommendation.controller
+  New file path: src\main\java\com\ecommerce\nivora\recommendation\controller\RecommendationController.java
+
+- RecommendationService.java
+  Old package: com.ecommerce.nivora.service
+  New package: com.ecommerce.nivora.recommendation.service
+  New file path: src\main\java\com\ecommerce\nivora\recommendation\service\RecommendationService.java
+
+- RecommendationServiceImpl.java
+  Old package: com.ecommerce.nivora.service.impl
+  New package: com.ecommerce.nivora.recommendation.service
+  New file path: src\main\java\com\ecommerce\nivora\recommendation\service\RecommendationServiceImpl.java
+
+- RefreshToken.java
+  Old package: com.ecommerce.nivora.entity
+  New package: com.ecommerce.nivora.auth.entity
+  New file path: src\main\java\com\ecommerce\nivora\auth\entity\RefreshToken.java
+
+- RefreshTokenRepository.java
+  Old package: com.ecommerce.nivora.repository
+  New package: com.ecommerce.nivora.auth.repository
+  New file path: src\main\java\com\ecommerce\nivora\auth\repository\RefreshTokenRepository.java
+
+- RefreshTokenRequest.java
+  Old package: com.ecommerce.nivora.dto.request
+  New package: com.ecommerce.nivora.auth.dto.request
+  New file path: src\main\java\com\ecommerce\nivora\auth\dto\request\RefreshTokenRequest.java
+
+- RegisterRequest.java
+  Old package: com.ecommerce.nivora.dto.request
+  New package: com.ecommerce.nivora.auth.dto.request
+  New file path: src\main\java\com\ecommerce\nivora\auth\dto\request\RegisterRequest.java
+
+- ResourceNotFoundException.java
+  Old package: com.ecommerce.nivora.exception
+  New package: com.ecommerce.nivora.exception
+  New file path: src\main\java\com\ecommerce\nivora\exception\ResourceNotFoundException.java
+
+- Review.java
+  Old package: com.ecommerce.nivora.entity
+  New package: com.ecommerce.nivora.review.entity
+  New file path: src\main\java\com\ecommerce\nivora\review\entity\Review.java
+
+- ReviewController.java
+  Old package: com.ecommerce.nivora.controller
+  New package: com.ecommerce.nivora.review.controller
+  New file path: src\main\java\com\ecommerce\nivora\review\controller\ReviewController.java
+
+- ReviewRepository.java
+  Old package: com.ecommerce.nivora.repository
+  New package: com.ecommerce.nivora.review.repository
+  New file path: src\main\java\com\ecommerce\nivora\review\repository\ReviewRepository.java
+
+- ReviewRequest.java
+  Old package: com.ecommerce.nivora.dto.request
+  New package: com.ecommerce.nivora.review.dto.request
+  New file path: src\main\java\com\ecommerce\nivora\review\dto\request\ReviewRequest.java
+
+- ReviewResponse.java
+  Old package: com.ecommerce.nivora.dto.response
+  New package: com.ecommerce.nivora.review.dto.response
+  New file path: src\main\java\com\ecommerce\nivora\review\dto\response\ReviewResponse.java
+
+- ReviewService.java
+  Old package: com.ecommerce.nivora.service
+  New package: com.ecommerce.nivora.review.service
+  New file path: src\main\java\com\ecommerce\nivora\review\service\ReviewService.java
+
+- ReviewServiceImpl.java
+  Old package: com.ecommerce.nivora.service.impl
+  New package: com.ecommerce.nivora.review.service
+  New file path: src\main\java\com\ecommerce\nivora\review\service\ReviewServiceImpl.java
+
+- Role.java
+  Old package: com.ecommerce.nivora.entity
+  New package: com.ecommerce.nivora.user.entity
+  New file path: src\main\java\com\ecommerce\nivora\user\entity\Role.java
+
+- RoleRepository.java
+  Old package: com.ecommerce.nivora.repository
+  New package: com.ecommerce.nivora.user.repository
+  New file path: src\main\java\com\ecommerce\nivora\user\repository\RoleRepository.java
+
+- SearchController.java
+  Old package: com.ecommerce.nivora.controller
+  New package: com.ecommerce.nivora.search.controller
+  New file path: src\main\java\com\ecommerce\nivora\search\controller\SearchController.java
+
+- SearchLog.java
+  Old package: com.ecommerce.nivora.entity
+  New package: com.ecommerce.nivora.search.entity
+  New file path: src\main\java\com\ecommerce\nivora\search\entity\SearchLog.java
+
+- SearchLogRepository.java
+  Old package: com.ecommerce.nivora.repository
+  New package: com.ecommerce.nivora.search.repository
+  New file path: src\main\java\com\ecommerce\nivora\search\repository\SearchLogRepository.java
+
+- SearchService.java
+  Old package: com.ecommerce.nivora.service
+  New package: com.ecommerce.nivora.search.service
+  New file path: src\main\java\com\ecommerce\nivora\search\service\SearchService.java
+
+- SearchServiceImpl.java
+  Old package: com.ecommerce.nivora.service.impl
+  New package: com.ecommerce.nivora.search.service
+  New file path: src\main\java\com\ecommerce\nivora\search\service\SearchServiceImpl.java
+
+- SecurityConfig.java
+  Old package: com.ecommerce.nivora.security
+  New package: com.ecommerce.nivora.security
+  New file path: src\main\java\com\ecommerce\nivora\security\SecurityConfig.java
+
+- SecurityUtils.java
+  Old package: com.ecommerce.nivora.utils
+  New package: com.ecommerce.nivora.security.utils
+  New file path: src\main\java\com\ecommerce\nivora\security\utils\SecurityUtils.java
+
+- ShippingAddress.java
+  Old package: com.ecommerce.nivora.entity
+  New package: com.ecommerce.nivora.order.entity
+  New file path: src\main\java\com\ecommerce\nivora\order\entity\ShippingAddress.java
+
+- ShippingAddressResponse.java
+  Old package: com.ecommerce.nivora.dto.response
+  New package: com.ecommerce.nivora.order.dto.response
+  New file path: src\main\java\com\ecommerce\nivora\order\dto\response\ShippingAddressResponse.java
+
+- SlugUtils.java
+  Old package: com.ecommerce.nivora.utils
+  New package: com.ecommerce.nivora.common.utils
+  New file path: src\main\java\com\ecommerce\nivora\common\utils\SlugUtils.java
+
+- SwaggerConfig.java
+  Old package: com.ecommerce.nivora.config
+  New package: com.ecommerce.nivora.config
+  New file path: src\main\java\com\ecommerce\nivora\config\SwaggerConfig.java
+
+- TrendingScheduler.java
+  Old package: com.ecommerce.nivora.scheduler
+  New package: com.ecommerce.nivora.recommendation.scheduler
+  New file path: src\main\java\com\ecommerce\nivora\recommendation\scheduler\TrendingScheduler.java
+
+- UnauthorizedException.java
+  Old package: com.ecommerce.nivora.exception
+  New package: com.ecommerce.nivora.exception
+  New file path: src\main\java\com\ecommerce\nivora\exception\UnauthorizedException.java
+
+- UpdateProfileRequest.java
+  Old package: com.ecommerce.nivora.dto.request
+  New package: com.ecommerce.nivora.user
+  New file path: src\main\java\com\ecommerce\nivora\user\UpdateProfileRequest.java
+
+- UploadController.java
+  Old package: com.ecommerce.nivora.controller
+  New package: com.ecommerce.nivora.upload.controller
+  New file path: src\main\java\com\ecommerce\nivora\upload\controller\UploadController.java
+
+- UploadResponse.java
+  Old package: com.ecommerce.nivora.dto.response
+  New package: com.ecommerce.nivora.upload.dto.response
+  New file path: src\main\java\com\ecommerce\nivora\upload\dto\response\UploadResponse.java
+
+- UploadService.java
+  Old package: com.ecommerce.nivora.service
+  New package: com.ecommerce.nivora.upload.service
+  New file path: src\main\java\com\ecommerce\nivora\upload\service\UploadService.java
+
+- UploadServiceImpl.java
+  Old package: com.ecommerce.nivora.service.impl
+  New package: com.ecommerce.nivora.upload.service
+  New file path: src\main\java\com\ecommerce\nivora\upload\service\UploadServiceImpl.java
+
+- User.java
+  Old package: com.ecommerce.nivora.entity
+  New package: com.ecommerce.nivora.user.entity
+  New file path: src\main\java\com\ecommerce\nivora\user\entity\User.java
+
+- UserAddress.java
+  Old package: com.ecommerce.nivora.entity
+  New package: com.ecommerce.nivora.user.entity
+  New file path: src\main\java\com\ecommerce\nivora\user\entity\UserAddress.java
+
+- UserBehaviorEvent.java
+  Old package: com.ecommerce.nivora.entity
+  New package: com.ecommerce.nivora.event.entity
+  New file path: src\main\java\com\ecommerce\nivora\event\entity\UserBehaviorEvent.java
+
+- UserBehaviorEventRepository.java
+  Old package: com.ecommerce.nivora.repository
+  New package: com.ecommerce.nivora.event.repository
+  New file path: src\main\java\com\ecommerce\nivora\event\repository\UserBehaviorEventRepository.java
+
+- UserBehaviorEventRequest.java
+  Old package: com.ecommerce.nivora.dto.request
+  New package: com.ecommerce.nivora.event.dto.request
+  New file path: src\main\java\com\ecommerce\nivora\event\dto\request\UserBehaviorEventRequest.java
+
+- UserBehaviorEventService.java
+  Old package: com.ecommerce.nivora.service
+  New package: com.ecommerce.nivora.event.service
+  New file path: src\main\java\com\ecommerce\nivora\event\service\UserBehaviorEventService.java
+
+- UserBehaviorEventServiceImpl.java
+  Old package: com.ecommerce.nivora.service.impl
+  New package: com.ecommerce.nivora.event.service
+  New file path: src\main\java\com\ecommerce\nivora\event\service\UserBehaviorEventServiceImpl.java
+
+- UserController.java
+  Old package: com.ecommerce.nivora.controller
+  New package: com.ecommerce.nivora.user.controller
+  New file path: src\main\java\com\ecommerce\nivora\user\controller\UserController.java
+
+- UserDetailsServiceImpl.java
+  Old package: com.ecommerce.nivora.security
+  New package: com.ecommerce.nivora.security
+  New file path: src\main\java\com\ecommerce\nivora\security\UserDetailsServiceImpl.java
+
+- UserRepository.java
+  Old package: com.ecommerce.nivora.repository
+  New package: com.ecommerce.nivora.user.repository
+  New file path: src\main\java\com\ecommerce\nivora\user\repository\UserRepository.java
+
+- UserResponse.java
+  Old package: com.ecommerce.nivora.dto.response
+  New package: com.ecommerce.nivora.user.dto.response
+  New file path: src\main\java\com\ecommerce\nivora\user\dto\response\UserResponse.java
+
+- Wishlist.java
+  Old package: com.ecommerce.nivora.entity
+  New package: com.ecommerce.nivora.wishlist.entity
+  New file path: src\main\java\com\ecommerce\nivora\wishlist\entity\Wishlist.java
+
+- WishlistController.java
+  Old package: com.ecommerce.nivora.controller
+  New package: com.ecommerce.nivora.wishlist.controller
+  New file path: src\main\java\com\ecommerce\nivora\wishlist\controller\WishlistController.java
+
+- WishlistItem.java
+  Old package: com.ecommerce.nivora.entity
+  New package: com.ecommerce.nivora.wishlist.entity
+  New file path: src\main\java\com\ecommerce\nivora\wishlist\entity\WishlistItem.java
+
+- WishlistItemRepository.java
+  Old package: com.ecommerce.nivora.repository
+  New package: com.ecommerce.nivora.wishlist.repository
+  New file path: src\main\java\com\ecommerce\nivora\wishlist\repository\WishlistItemRepository.java
+
+- WishlistRepository.java
+  Old package: com.ecommerce.nivora.repository
+  New package: com.ecommerce.nivora.wishlist.repository
+  New file path: src\main\java\com\ecommerce\nivora\wishlist\repository\WishlistRepository.java
+
+- WishlistService.java
+  Old package: com.ecommerce.nivora.service
+  New package: com.ecommerce.nivora.wishlist.service
+  New file path: src\main\java\com\ecommerce\nivora\wishlist\service\WishlistService.java
+
+- WishlistServiceImpl.java
+  Old package: com.ecommerce.nivora.service.impl
+  New package: com.ecommerce.nivora.wishlist.service
+  New file path: src\main\java\com\ecommerce\nivora\wishlist\service\WishlistServiceImpl.java
+
