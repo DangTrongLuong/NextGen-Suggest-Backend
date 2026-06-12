@@ -42,4 +42,7 @@ public class ProductResponse {
     private List<ProductVariantResponse> variants;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    private Double recommendationScore;
+    private String recommendationReason;
 }

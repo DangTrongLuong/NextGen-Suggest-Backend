@@ -3,6 +3,8 @@ package com.ecommerce.nivora.service.impl;
 import com.ecommerce.nivora.dto.request.FastApiHybridRecommendRequest;
 import com.ecommerce.nivora.dto.response.*;
 import com.ecommerce.nivora.entity.RecommendationCache;
+import com.ecommerce.nivora.entity.User;
+import com.ecommerce.nivora.entity.UserAddress;
 import com.ecommerce.nivora.entity.Wishlist;
 import com.ecommerce.nivora.repository.*;
 import com.ecommerce.nivora.service.ProductService;
@@ -31,6 +33,7 @@ public class RecommendationServiceImpl implements RecommendationService {
     private final WishlistRepository wishlistRepository;
     private final OrderRepository orderRepository;
     private final ProductRepository productRepository;
+    private final UserRepository userRepository;
 
     @Value("${app.fastapi-url}")
     private String fastApiUrl;
@@ -55,7 +58,46 @@ public class RecommendationServiceImpl implements RecommendationService {
         // 3. Lấy Tiếp tục xem (Recent Viewed)
         List<ProductResponse> recent = getRecentViewed(sessionId, userId, guestViewedIds);
 
-        // 4. Lấy AI Recommendations (Personalized) & You May Need (Cross-sell)
+        // 4. Thu thập hồ sơ người dùng (Demographics) và vị trí để cá nhân hóa gợi ý
+        Integer age = null;
+        String gender = null;
+        String occupation = null;
+        Double income = null;
+        String maritalStatus = null;
+        String location = null;
+        List<String> locationProductUuids = new ArrayList<>();
+
+        if (userId != null) {
+            User user = userRepository.findById(userId).orElse(null);
+            if (user != null) {
+                age = user.getAge();
+                gender = user.getGender();
+                occupation = user.getOccupation();
+                if (user.getIncome() != null) {
+                    income = user.getIncome().doubleValue();
+                }
+                maritalStatus = user.getMaritalStatus();
+
+                // Trích xuất tỉnh thành từ danh sách địa chỉ nhận hàng
+                if (user.getAddresses() != null) {
+                    for (UserAddress addr : user.getAddresses()) {
+                        if (Boolean.TRUE.equals(addr.getIsDefault())) {
+                            location = addr.getCity();
+                            break;
+                        }
+                    }
+                    if (location == null && !user.getAddresses().isEmpty()) {
+                        location = user.getAddresses().get(0).getCity();
+                    }
+                }
+            }
+
+            if (location != null && !location.isBlank()) {
+                locationProductUuids = orderRepository.findTopProductsByLocation(location, PageRequest.of(0, 15));
+            }
+        }
+
+        // 5. Lấy AI Recommendations (Personalized) & You May Need (Cross-sell)
         List<ProductResponse> personal = new ArrayList<>();
         List<ProductResponse> youMayNeed = new ArrayList<>();
         
@@ -76,6 +118,14 @@ public class RecommendationServiceImpl implements RecommendationService {
                     .wishlist_product_ids(wishlistUuids)
                     .purchased_product_ids(purchasedUuids)
                     .popular_product_ids(popularUuids)
+                    .location_product_ids(locationProductUuids)
+                    .user_age(age)
+                    .user_gender(gender)
+                    .user_occupation(occupation)
+                    .user_income(income)
+                    .user_marital_status(maritalStatus)
+                    .user_location(location)
+                    .user_id(userId != null ? String.valueOf(userId) : null)
                     .top_k(12)
                     .exclude_viewed(true)
                     .build();
@@ -88,10 +138,27 @@ public class RecommendationServiceImpl implements RecommendationService {
                         .map(FastApiProductResult::getProductId)
                         .collect(Collectors.toList());
 
+                log.info("[Recommendation] userId: {}, cacheKey: recommend:user:{}:homepage, viewHistory: {}, recommendationIds: {}",
+                        userId, userId, viewedUuids, recommendedUuids);
+
                 Map<String, ProductResponse> hydratedProducts = productService.getActiveProductsBySkus(recommendedUuids);
                 
+                // Bản đồ ánh xạ kết quả FastAPI để sao chép score & reason nhanh
+                Map<String, FastApiProductResult> apiResultMap = apiResponse.getRecommendations().stream()
+                        .collect(Collectors.toMap(FastApiProductResult::getProductId, r -> r, (r1, r2) -> r1));
+
                 List<ProductResponse> allRecs = recommendedUuids.stream()
-                        .map(hydratedProducts::get)
+                        .map(uuid -> {
+                            ProductResponse hydrated = hydratedProducts.get(uuid);
+                            if (hydrated != null) {
+                                FastApiProductResult apiRes = apiResultMap.get(uuid);
+                                if (apiRes != null) {
+                                    hydrated.setRecommendationScore(apiRes.getScore());
+                                    hydrated.setRecommendationReason(apiRes.getReason());
+                                }
+                            }
+                            return hydrated;
+                        })
                         .filter(Objects::nonNull)
                         .collect(Collectors.toList());
 
@@ -106,6 +173,11 @@ public class RecommendationServiceImpl implements RecommendationService {
                             .filter(p -> !personal.contains(p))
                             .limit(4)
                             .collect(Collectors.toList()));
+                    for (ProductResponse p : youMayNeed) {
+                        if (p.getRecommendationReason() == null) {
+                            p.setRecommendationReason("Có thể bạn quan tâm");
+                        }
+                    }
                 }
             }
         } catch (Exception e) {
@@ -115,9 +187,17 @@ public class RecommendationServiceImpl implements RecommendationService {
         // Fallbacks nếu FastAPI gặp lỗi hoặc không trả về kết quả
         if (personal.isEmpty()) {
             personal.addAll(featured);
+            for (ProductResponse p : personal) {
+                p.setRecommendationReason("Sản phẩm nổi bật tuần này");
+                p.setRecommendationScore(0.85);
+            }
         }
         if (youMayNeed.isEmpty()) {
             youMayNeed.addAll(bestSellers.stream().limit(4).collect(Collectors.toList()));
+            for (ProductResponse p : youMayNeed) {
+                p.setRecommendationReason("Sản phẩm bán chạy nhất hệ thống");
+                p.setRecommendationScore(0.8);
+            }
         }
 
         return HomepageRecommendationResponse.builder()
@@ -129,6 +209,41 @@ public class RecommendationServiceImpl implements RecommendationService {
                 .personal(personal)
                 .youMayNeed(youMayNeed)
                 .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProductResponse> getRecommendationsByLocation(String location, int limit) {
+        log.info("Fetching regional recommendations for location: {}, limit: {}", location, limit);
+        if (location == null || location.isBlank()) {
+            return Collections.emptyList();
+        }
+
+        List<String> productUuids = orderRepository.findTopProductsByLocation(location, PageRequest.of(0, limit));
+        if (productUuids.isEmpty()) {
+            List<ProductResponse> bestSellers = productService.getBestSellers();
+            return bestSellers.stream()
+                    .limit(limit)
+                    .map(p -> {
+                        p.setRecommendationReason("💡 Phổ biến tại " + location);
+                        p.setRecommendationScore(0.8);
+                        return p;
+                    })
+                    .collect(Collectors.toList());
+        }
+
+        Map<String, ProductResponse> hydratedProducts = productService.getActiveProductsBySkus(productUuids);
+        return productUuids.stream()
+                .map(uuid -> {
+                    ProductResponse p = hydratedProducts.get(uuid);
+                    if (p != null) {
+                        p.setRecommendationReason("💡 Phổ biến tại " + location);
+                        p.setRecommendationScore(0.9);
+                    }
+                    return p;
+                })
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
     }
 
     private List<ProductResponse> getTrendingFromCache(String recType) {
@@ -163,6 +278,7 @@ public class RecommendationServiceImpl implements RecommendationService {
                         .filter(Objects::nonNull)
                         .collect(Collectors.toList());
             }
+            return Collections.emptyList(); // Không lấy ké dữ liệu khách vãng lai hoặc session cũ
         }
         
         // Nếu không có trong DB hoặc là Guest User

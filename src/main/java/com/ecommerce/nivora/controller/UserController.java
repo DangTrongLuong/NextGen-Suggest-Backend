@@ -22,12 +22,31 @@ import java.util.stream.Collectors;
 public class UserController {
 
     private final SecurityUtils securityUtils;
+    private final com.ecommerce.nivora.repository.UserRepository userRepository;
 
     @GetMapping("/me")
     @Operation(summary = "Get current user profile")
     public ResponseEntity<ApiResponse<UserResponse>> getMe() {
         User user = securityUtils.getCurrentUser();
         return ResponseEntity.ok(ApiResponse.success(toResponse(user)));
+    }
+
+    @PutMapping("/me")
+    @Operation(summary = "Update current user profile")
+    public ResponseEntity<ApiResponse<UserResponse>> updateMe(@RequestBody com.ecommerce.nivora.dto.request.UpdateProfileRequest request) {
+        User user = securityUtils.getCurrentUser();
+        
+        if (request.getName() != null) user.setName(request.getName());
+        if (request.getPhone() != null) user.setPhone(request.getPhone());
+        if (request.getAvatarUrl() != null) user.setAvatarUrl(request.getAvatarUrl());
+        if (request.getAge() != null) user.setAge(request.getAge());
+        if (request.getGender() != null) user.setGender(request.getGender());
+        if (request.getOccupation() != null) user.setOccupation(request.getOccupation());
+        if (request.getIncome() != null) user.setIncome(request.getIncome());
+        if (request.getMaritalStatus() != null) user.setMaritalStatus(request.getMaritalStatus());
+        
+        User savedUser = userRepository.save(user);
+        return ResponseEntity.ok(ApiResponse.success(toResponse(savedUser)));
     }
 
     private UserResponse toResponse(User user) {
@@ -44,6 +63,11 @@ public class UserController {
                 .isActive(user.getIsActive())
                 .createdAt(user.getCreatedAt())
                 .emailVerifiedAt(user.getEmailVerifiedAt())
+                .age(user.getAge())
+                .gender(user.getGender())
+                .occupation(user.getOccupation())
+                .income(user.getIncome())
+                .maritalStatus(user.getMaritalStatus())
                 .build();
     }
 }

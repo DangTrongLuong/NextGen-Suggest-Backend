@@ -17,4 +17,10 @@ public class UserResponse {
     private Boolean isActive;
     private LocalDateTime createdAt;
     private LocalDateTime emailVerifiedAt;
+
+    private Integer age;
+    private String gender;
+    private String occupation;
+    private java.math.BigDecimal income;
+    private String maritalStatus;
 }
