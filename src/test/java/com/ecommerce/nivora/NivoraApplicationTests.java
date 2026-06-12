@@ -1,11 +1,13 @@
 package com.ecommerce.nivora;
 
-import com.ecommerce.nivora.entity.Category;
-import com.ecommerce.nivora.entity.Product;
-import com.ecommerce.nivora.entity.ProductVariant;
-import com.ecommerce.nivora.entity.Inventory;
-import com.ecommerce.nivora.repository.CategoryRepository;
-import com.ecommerce.nivora.repository.ProductRepository;
+import com.ecommerce.nivora.category.entity.Category;
+import com.ecommerce.nivora.category.repository.CategoryRepository;
+import com.ecommerce.nivora.product.entity.Inventory;
+import com.ecommerce.nivora.product.entity.Product;
+import com.ecommerce.nivora.product.entity.ProductVariant;
+import com.ecommerce.nivora.product.repository.ProductRepository;
+
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

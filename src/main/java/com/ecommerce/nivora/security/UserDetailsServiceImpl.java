@@ -1,7 +1,9 @@
 package com.ecommerce.nivora.security;
 
-import com.ecommerce.nivora.entity.User;
-import com.ecommerce.nivora.repository.UserRepository;
+import com.ecommerce.nivora.user.entity.User;
+import com.ecommerce.nivora.user.repository.UserRepository;
+
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.*;

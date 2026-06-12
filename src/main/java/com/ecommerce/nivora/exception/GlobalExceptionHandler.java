@@ -1,6 +1,9 @@
 package com.ecommerce.nivora.exception;
 
-import com.ecommerce.nivora.common.ApiResponse;
+import com.ecommerce.nivora.common.dto.response.ApiResponse;
+import com.ecommerce.nivora.exception.dto.request.BadRequestException;
+
+
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

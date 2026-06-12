@@ -1,6 +1,8 @@
 package com.ecommerce.nivora.security;
 
-import com.ecommerce.nivora.utils.JwtUtils;
+import com.ecommerce.nivora.security.utils.JwtUtils;
+
+
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
