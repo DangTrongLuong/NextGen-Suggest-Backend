@@ -42,4 +42,13 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     @Query("SELECT DISTINCT oi.product.uuid FROM Order o JOIN o.items oi WHERE o.user.id = :userId AND o.status <> 'CANCELLED'")
     List<String> findPurchasedProductUuidsByUserId(@Param("userId") Long userId);
+
+    @Query("SELECT oi.product.uuid, COUNT(oi.id) as count " +
+           "FROM OrderItem oi " +
+           "JOIN oi.order o " +
+           "JOIN o.shippingAddress sa " +
+           "WHERE sa.city LIKE CONCAT('%', :city, '%') OR sa.state LIKE CONCAT('%', :city, '%') " +
+           "GROUP BY oi.product.uuid " +
+           "ORDER BY count DESC")
+    List<String> findTopProductsByLocation(@Param("city") String city, org.springframework.data.domain.Pageable pageable);
 }

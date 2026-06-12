@@ -52,18 +52,19 @@ public class SearchServiceImpl implements SearchService {
         int candidateK = rerank ? Math.min(Math.max((int) (safeTopK * 1.5), 15), 200) : safeTopK;
 
         try {
-            String targetUrl = UriComponentsBuilder.fromHttpUrl(fastApiUrl)
+            java.net.URI targetUri = UriComponentsBuilder.fromHttpUrl(fastApiUrl)
                     .path("/api/v1/search")
                     .queryParam("q", query)
                     .queryParam("use_reranking", rerank)
                     .queryParam("candidate_k", candidateK)
                     .queryParam("top_k", safeTopK)
                     .build()
-                    .toUriString();
+                    .encode(java.nio.charset.StandardCharsets.UTF_8)
+                    .toUri();
 
-            log.info("Forwarding search query '{}' (rerank={}, topK={}) to FastAPI: {}", query, rerank, safeTopK, targetUrl);
+            log.info("Forwarding search query '{}' (rerank={}, topK={}) to FastAPI: {}", query, rerank, safeTopK, targetUri);
 
-            FastApiSearchResponse apiResponse = restTemplate.getForObject(targetUrl, FastApiSearchResponse.class);
+            FastApiSearchResponse apiResponse = restTemplate.getForObject(targetUri, FastApiSearchResponse.class);
 
             if (apiResponse == null || apiResponse.getResults() == null || apiResponse.getResults().isEmpty()) {
                 log.info("No semantic search results returned from FastAPI for query: {}", query);
@@ -112,18 +113,19 @@ public class SearchServiceImpl implements SearchService {
         long startTime = System.currentTimeMillis();
         try {
             // Only pass page and size — FastAPI handles candidate fetch and reranking internally.
-            String targetUrl = UriComponentsBuilder.fromHttpUrl(fastApiUrl)
+            java.net.URI targetUri = UriComponentsBuilder.fromHttpUrl(fastApiUrl)
                     .path("/api/v1/search")
                     .queryParam("q", query)
                     .queryParam("use_reranking", rerank)
                     .queryParam("page", page)
                     .queryParam("size", size)
                     .build()
-                    .toUriString();
+                    .encode(java.nio.charset.StandardCharsets.UTF_8)
+                    .toUri();
 
-            log.info("Forwarding paginated search query '{}' (rerank={}, page={}, size={}) to FastAPI: {}", query, rerank, page, size, targetUrl);
+            log.info("Forwarding paginated search query '{}' (rerank={}, page={}, size={}) to FastAPI: {}", query, rerank, page, size, targetUri);
 
-            FastApiSearchResponse apiResponse = restTemplate.getForObject(targetUrl, FastApiSearchResponse.class);
+            FastApiSearchResponse apiResponse = restTemplate.getForObject(targetUri, FastApiSearchResponse.class);
 
             if (apiResponse == null || apiResponse.getResults() == null || apiResponse.getResults().isEmpty()) {
                 log.info("No semantic search results returned from FastAPI for paginated query: {}", query);

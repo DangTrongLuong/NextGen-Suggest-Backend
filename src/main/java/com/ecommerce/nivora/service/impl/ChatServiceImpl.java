@@ -23,6 +23,7 @@ public class ChatServiceImpl implements ChatService {
 
     private final RestTemplate restTemplate;
     private final ProductService productService;
+    private final com.ecommerce.nivora.utils.SecurityUtils securityUtils;
 
     private static final Pattern SLUG_PATTERN = Pattern.compile("[^a-z0-9]+");
 
@@ -39,14 +40,63 @@ public class ChatServiceImpl implements ChatService {
         }
 
         try {
+            // 1. Lấy thông tin User hiện tại nếu đã đăng nhập (không ném lỗi nếu là Guest)
+            com.ecommerce.nivora.entity.User currentUser = null;
+            try {
+                org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+                if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
+                    currentUser = securityUtils.getCurrentUser();
+                }
+            } catch (Exception e) {
+                // Khách vãng lai
+            }
+
+            // 2. Lấy Session ID
+            String sessionId = "anonymous-session";
+            try {
+                org.springframework.web.context.request.ServletRequestAttributes attr = 
+                    (org.springframework.web.context.request.ServletRequestAttributes) org.springframework.web.context.request.RequestContextHolder.currentRequestAttributes();
+                if (attr != null && attr.getRequest() != null) {
+                    var session = attr.getRequest().getSession(false);
+                    if (session != null) {
+                        sessionId = session.getId();
+                    } else {
+                        sessionId = attr.getRequest().getSession(true).getId();
+                    }
+                }
+            } catch (Exception e) {
+                // Bỏ qua
+            }
+
+            // 3. Chuẩn bị Request Payload gửi sang FastAPI
+            Map<String, Object> apiRequest = new HashMap<>();
+            apiRequest.put("messages", request.getMessages());
+
+            if (currentUser != null) {
+                apiRequest.put("user_id", String.valueOf(currentUser.getId()));
+                
+                Map<String, Object> profile = new HashMap<>();
+                profile.put("name", currentUser.getName());
+                profile.put("email", currentUser.getEmail());
+                profile.put("age", currentUser.getAge());
+                profile.put("gender", currentUser.getGender());
+                profile.put("occupation", currentUser.getOccupation());
+                profile.put("income", currentUser.getIncome());
+                profile.put("marital_status", currentUser.getMaritalStatus());
+                
+                apiRequest.put("user_profile", profile);
+            } else {
+                apiRequest.put("session_id", sessionId);
+            }
+
             String targetUrl = UriComponentsBuilder.fromHttpUrl(fastApiUrl)
                     .path("/api/v1/chat")
                     .build()
                     .toUriString();
 
-            log.info("Forwarding chat request to FastAPI: {}", targetUrl);
+            log.info("Forwarding personalized chat request to FastAPI: {}", targetUrl);
 
-            FastApiChatResponse apiResponse = restTemplate.postForObject(targetUrl, request, FastApiChatResponse.class);
+            FastApiChatResponse apiResponse = restTemplate.postForObject(targetUrl, apiRequest, FastApiChatResponse.class);
 
             if (apiResponse == null) {
                 return ChatResponse.builder()
@@ -68,6 +118,9 @@ public class ChatServiceImpl implements ChatService {
                 for (FastApiProductResult res : apiResponse.getSuggestedProducts()) {
                     ProductResponse dbProduct = dbProductsBySku.get(res.getProductId());
                     if (dbProduct != null) {
+                        // Thiết lập điểm số và lý do gợi ý cho sản phẩm chatbot
+                        dbProduct.setRecommendationScore(res.getScore());
+                        dbProduct.setRecommendationReason(res.getReason() != null ? res.getReason() : "Gợi ý từ trợ lý AI");
                         hydratedProducts.add(dbProduct);
                     } else {
                         hydratedProducts.add(mapFromFastApi(res));

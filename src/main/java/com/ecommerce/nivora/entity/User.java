@@ -68,6 +68,21 @@ public class User {
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private Wishlist wishlist;
 
+    @Column(name = "age")
+    private Integer age;
+
+    @Column(name = "gender", length = 20)
+    private String gender;
+
+    @Column(name = "occupation", length = 100)
+    private String occupation;
+
+    @Column(name = "income", precision = 15, scale = 2)
+    private java.math.BigDecimal income;
+
+    @Column(name = "marital_status", length = 30)
+    private String maritalStatus;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

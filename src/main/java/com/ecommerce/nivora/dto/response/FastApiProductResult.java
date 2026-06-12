@@ -22,4 +22,5 @@ public class FastApiProductResult {
     private Double rerankerScore;
     
     private Integer rank;
+    private String reason;
 }

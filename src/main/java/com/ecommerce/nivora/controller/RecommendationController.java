@@ -2,6 +2,7 @@ package com.ecommerce.nivora.controller;
 
 import com.ecommerce.nivora.common.ApiResponse;
 import com.ecommerce.nivora.dto.response.HomepageRecommendationResponse;
+import com.ecommerce.nivora.dto.response.ProductResponse;
 import com.ecommerce.nivora.entity.User;
 import com.ecommerce.nivora.repository.UserRepository;
 import com.ecommerce.nivora.service.RecommendationService;
@@ -46,6 +47,16 @@ public class RecommendationController {
 
         List<Long> viewedIds = guestViewedIds != null ? guestViewedIds : new ArrayList<>();
         HomepageRecommendationResponse response = recommendationService.getHomepageRecommendations(sessionId, userId, viewedIds);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/location")
+    @Operation(summary = "Get regional product recommendations based on customer orders in that location")
+    public ResponseEntity<ApiResponse<List<ProductResponse>>> getRecommendationsByLocation(
+            @RequestParam String location,
+            @RequestParam(defaultValue = "8") int limit
+    ) {
+        List<ProductResponse> response = recommendationService.getRecommendationsByLocation(location, limit);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 }
