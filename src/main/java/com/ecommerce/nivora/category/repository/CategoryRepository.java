@@ -21,6 +21,7 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
     List<Category> findByIsActiveTrueAndDeletedAtIsNullOrderByDisplayOrderAsc();
     List<Category> findByDeletedAtIsNullOrderByDisplayOrderAsc();
     boolean existsBySlug(String slug);
+    boolean existsByParentIdAndDeletedAtIsNull(Long parentId);
 
     @Query("SELECT c FROM Category c WHERE c.isActive = true AND c.deletedAt IS NULL " +
             "AND (:parentOnly = false OR c.parent IS NULL) " +

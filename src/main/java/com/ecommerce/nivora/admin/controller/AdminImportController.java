@@ -2,6 +2,7 @@ package com.ecommerce.nivora.admin.controller;
 
 import com.ecommerce.nivora.admin.entity.ImportJob;
 import com.ecommerce.nivora.admin.service.ImportService;
+import com.ecommerce.nivora.admin.service.ProgressTrackingService;
 import com.ecommerce.nivora.category.entity.Category;
 import com.ecommerce.nivora.category.repository.CategoryRepository;
 import com.ecommerce.nivora.common.dto.response.ApiResponse;
@@ -17,10 +18,12 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -41,6 +44,7 @@ public class AdminImportController {
     private final CategoryRepository categoryRepository;
     private final ProductRepository productRepository;
     private final ImportReferenceMappingRepository mappingRepository;
+    private final ProgressTrackingService progressTrackingService;
 
     @GetMapping("/schema/product")
     @Operation(summary = "Get product schema fields dynamically")
@@ -142,6 +146,22 @@ public class AdminImportController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         return ResponseEntity.ok(ApiResponse.success(PageResponse.of(importService.getImportHistory(PageRequest.of(page, size)))));
+    }
+
+    @GetMapping("/jobs/{jobId}")
+    @Operation(summary = "Get details/status of a specific import job")
+    public ResponseEntity<ApiResponse<ImportJob>> getJobDetails(@PathVariable Long jobId) {
+        ImportJob job = progressTrackingService.getJobStatus(jobId);
+        if (job == null) {
+            return ResponseEntity.status(404).body(ApiResponse.error("Không tìm thấy import job: " + jobId));
+        }
+        return ResponseEntity.ok(ApiResponse.success(job));
+    }
+
+    @GetMapping(value = "/jobs/{jobId}/progress", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @Operation(summary = "Get real-time SSE progress stream of a specific import job")
+    public SseEmitter getJobProgressStream(@PathVariable Long jobId) {
+        return progressTrackingService.registerEmitter(jobId);
     }
 
     private List<String> getFields(Class<?> clazz) {
