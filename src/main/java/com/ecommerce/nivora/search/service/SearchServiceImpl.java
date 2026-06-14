@@ -78,17 +78,17 @@ public class SearchServiceImpl implements SearchService {
                 return Collections.emptyList();
             }
 
-            List<String> skus = apiResponse.getResults().stream()
+            List<String> uuids = apiResponse.getResults().stream()
                     .map(FastApiProductResult::getProductId)
                     .filter(Objects::nonNull)
                     .collect(Collectors.toList());
 
-            Map<String, ProductResponse> dbProductsBySku = productService.getActiveProductsBySkus(skus);
-            log.info("Hydrated {}/{} semantic results from database", dbProductsBySku.size(), skus.size());
+            Map<String, ProductResponse> dbProductsByUuid = productService.getActiveProductsByUuids(uuids);
+            log.info("Hydrated {}/{} semantic results from database", dbProductsByUuid.size(), uuids.size());
 
             List<ProductResponse> results = apiResponse.getResults().stream()
                     .map(res -> {
-                        ProductResponse dbProduct = dbProductsBySku.get(res.getProductId());
+                        ProductResponse dbProduct = dbProductsByUuid.get(res.getProductId());
                         return dbProduct != null ? dbProduct : mapFromFastApi(res);
                     })
                     .collect(Collectors.toList());
@@ -160,17 +160,17 @@ public class SearchServiceImpl implements SearchService {
             }
             int totalPages = (int) Math.ceil((double) totalElements / size);
 
-            List<String> skus = pageResults.stream()
+            List<String> uuids = pageResults.stream()
                     .map(FastApiProductResult::getProductId)
                     .filter(Objects::nonNull)
                     .collect(Collectors.toList());
 
-            Map<String, ProductResponse> dbProductsBySku = productService.getActiveProductsBySkus(skus);
-            log.info("Hydrated {}/{} semantic results for page {} from database", dbProductsBySku.size(), skus.size(), page);
+            Map<String, ProductResponse> dbProductsByUuid = productService.getActiveProductsByUuids(uuids);
+            log.info("Hydrated {}/{} semantic results for page {} from database", dbProductsByUuid.size(), uuids.size(), page);
 
             List<ProductResponse> content = pageResults.stream()
                     .map(res -> {
-                        ProductResponse dbProduct = dbProductsBySku.get(res.getProductId());
+                        ProductResponse dbProduct = dbProductsByUuid.get(res.getProductId());
                         return dbProduct != null ? dbProduct : mapFromFastApi(res);
                     })
                     .collect(Collectors.toList());
