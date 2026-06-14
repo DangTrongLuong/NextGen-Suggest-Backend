@@ -278,7 +278,7 @@ public class ProductServiceImpl implements ProductService {
         Category category = categoryRepository.findById(request.getCategoryId())
                 .orElseThrow(() -> new ResourceNotFoundException("Category", request.getCategoryId()));
 
-        if (!category.isLeaf()) {
+        if (categoryRepository.existsByParentIdAndDeletedAtIsNull(category.getId())) {
             throw new BadRequestException("Sản phẩm chỉ có thể thuộc về danh mục lá (leaf category)");
         }
 
@@ -385,7 +385,7 @@ public class ProductServiceImpl implements ProductService {
         Category category = categoryRepository.findById(request.getCategoryId())
                 .orElseThrow(() -> new ResourceNotFoundException("Category", request.getCategoryId()));
 
-        if (!category.isLeaf()) {
+        if (categoryRepository.existsByParentIdAndDeletedAtIsNull(category.getId())) {
             throw new BadRequestException("Sản phẩm chỉ có thể thuộc về danh mục lá (leaf category)");
         }
 

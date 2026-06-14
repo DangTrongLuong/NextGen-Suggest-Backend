@@ -18,6 +18,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     Optional<Product> findBySlugAndDeletedAtIsNull(String slug);
     Optional<Product> findByIdAndDeletedAtIsNull(Long id);
+    Optional<Product> findByUuidAndDeletedAtIsNull(String uuid);
 
     @Query("SELECT p FROM Product p JOIN p.variants v WHERE v.sku = :sku AND p.deletedAt IS NULL AND v.deletedAt IS NULL")
     Optional<Product> findBySkuAndDeletedAtIsNull(@Param("sku") String sku);

@@ -2,16 +2,6 @@ package com.ecommerce.nivora.admin.service;
 
 import com.ecommerce.nivora.admin.entity.ImportJob;
 import com.ecommerce.nivora.admin.repository.ImportJobRepository;
-import com.ecommerce.nivora.category.dto.request.CategoryRequest;
-import com.ecommerce.nivora.category.entity.Category;
-import com.ecommerce.nivora.category.repository.CategoryRepository;
-import com.ecommerce.nivora.category.service.CategoryService;
-import com.ecommerce.nivora.common.entity.ImportReferenceMapping;
-import com.ecommerce.nivora.common.repository.ImportReferenceMappingRepository;
-import com.ecommerce.nivora.product.dto.request.ProductRequest;
-import com.ecommerce.nivora.product.entity.Product;
-import com.ecommerce.nivora.product.repository.ProductRepository;
-import com.ecommerce.nivora.product.service.ProductService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -22,33 +12,50 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
-import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.math.BigDecimal;
+import org.springframework.beans.factory.annotation.Qualifier;
+import com.ecommerce.nivora.product.entity.Product;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
+import org.springframework.core.task.TaskExecutor;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class ImportServiceImpl implements ImportService {
 
     private final ImportJobRepository jobRepository;
-    private final ImportReferenceMappingRepository mappingRepository;
-    private final ProductRepository productRepository;
-    private final CategoryRepository categoryRepository;
-    private final ProductService productService;
-    private final CategoryService categoryService;
     private final RestTemplate restTemplate;
-    private final PlatformTransactionManager transactionManager;
     private final jakarta.servlet.http.HttpServletRequest httpServletRequest;
+
+    private final ProgressTrackingService progressTrackingService;
+    private final ImportMySQLService importMySQLService;
+    private final ImportEmbeddingService importEmbeddingService;
+    private final ImportQdrantService importQdrantService;
+    private final TaskExecutor taskExecutor;
+
+    public ImportServiceImpl(
+            ImportJobRepository jobRepository,
+            RestTemplate restTemplate,
+            jakarta.servlet.http.HttpServletRequest httpServletRequest,
+            ProgressTrackingService progressTrackingService,
+            ImportMySQLService importMySQLService,
+            ImportEmbeddingService importEmbeddingService,
+            ImportQdrantService importQdrantService,
+            @Qualifier("applicationTaskExecutor") TaskExecutor taskExecutor) {
+        this.jobRepository = jobRepository;
+        this.restTemplate = restTemplate;
+        this.httpServletRequest = httpServletRequest;
+        this.progressTrackingService = progressTrackingService;
+        this.importMySQLService = importMySQLService;
+        this.importEmbeddingService = importEmbeddingService;
+        this.importQdrantService = importQdrantService;
+        this.taskExecutor = taskExecutor;
+    }
 
     @Value("${app.fastapi-url}")
     private String fastApiUrl;
@@ -66,10 +73,7 @@ public class ImportServiceImpl implements ImportService {
         try {
             Map<String, Object> fastApiResponse = forwardFileToFastApi(file, "/api/v1/import/parse/products");
             
-            // Extract stats
             int total = (Integer) fastApiResponse.getOrDefault("totalRows", 0);
-            int valid = (Integer) fastApiResponse.getOrDefault("validRows", 0);
-            int errorsCount = (Integer) fastApiResponse.getOrDefault("errorRows", 0);
             
             job.setTotalRows(total);
             jobRepository.save(job);
@@ -121,40 +125,124 @@ public class ImportServiceImpl implements ImportService {
         job.setStatus("PROCESSING");
         jobRepository.save(job);
 
-        List<Map<String, Object>> errors = new ArrayList<>();
-        int batchSize = 100;
-        int successCount = 0;
-        int failedCount = 0;
+        log.info("Starting asynchronous Products Import Job with high-performance batching. Job ID: {}, Rows to process: {}", jobId, rows.size());
 
-        List<Map<String, Object>> currentBatch = new ArrayList<>();
-        for (int i = 0; i < rows.size(); i++) {
-            currentBatch.add(rows.get(i));
-            if (currentBatch.size() == batchSize || i == rows.size() - 1) {
-                // Execute batch
-                BatchResult batchResult = executeBatch(currentBatch, "PRODUCT");
-                successCount += batchResult.successCount;
-                failedCount += batchResult.failedCount;
-                errors.addAll(batchResult.errors);
-                
-                // Update job progress
-                job.setSuccessRows(successCount);
-                job.setFailedRows(failedCount);
-                jobRepository.save(job);
+        taskExecutor.execute(() -> {
+            int successCount = 0;
+            int duplicateCount = 0;
+            int failedCount = 0;
+            List<Map<String, Object>> duplicateDetails = new ArrayList<>();
+            List<Map<String, Object>> errorDetails = new ArrayList<>();
 
-                currentBatch.clear();
+            List<Product> batchProducts = new ArrayList<>();
+            Map<String, Integer> uuidToRowNum = new HashMap<>();
+            Map<String, String> uuidToName = new HashMap<>();
+
+            int processedInLoop = 0;
+            for (Map<String, Object> row : rows) {
+                processedInLoop++;
+                boolean isLastRow = (processedInLoop == rows.size());
+                int rowNum = (Integer) row.getOrDefault("rowIndex", 0);
+                String name = (String) row.get("name");
+                if (name == null) {
+                    name = (String) row.get("product_name");
+                }
+                if (name == null) {
+                    name = "Dòng #" + rowNum;
+                }
+
+                try {
+                    // Check duplicate
+                    if (importMySQLService.isProductDuplicate(row)) {
+                        duplicateCount++;
+                        duplicateDetails.add(Map.of(
+                                "row", rowNum,
+                                "item", name,
+                                "reason", "Sản phẩm đã tồn tại trong hệ thống (trùng SKU, URL hoặc Tên + Thương hiệu)"
+                        ));
+                        // Push progress immediately for skipped duplicate
+                        progressTrackingService.updateProgress(jobId, successCount, duplicateCount, failedCount, "PROCESSING", duplicateDetails, errorDetails);
+                    } else {
+                        // Pipeline Step 1, 2, 4: Save to MySQL (committed in separate REQUIRES_NEW transaction)
+                        var product = importMySQLService.saveProductRow(row);
+                        batchProducts.add(product);
+                        uuidToRowNum.put(product.getUuid(), rowNum);
+                        uuidToName.put(product.getUuid(), name);
+                    }
+                } catch (Exception e) {
+                    log.error("MySQL Insert failed for row: {}", rowNum, e);
+                    failedCount++;
+                    errorDetails.add(Map.of(
+                            "row", rowNum,
+                            "item", name,
+                            "reason", "Lỗi lưu MySQL: " + e.getMessage()
+                    ));
+                    progressTrackingService.updateProgress(jobId, successCount, duplicateCount, failedCount, "PROCESSING", duplicateDetails, errorDetails);
+                }
+
+                // If batch size is reached or we are on the last row and have pending products
+                if (batchProducts.size() >= 50 || (isLastRow && !batchProducts.isEmpty())) {
+                    List<String> uuids = batchProducts.stream().map(Product::getUuid).collect(Collectors.toList());
+                    try {
+                        // Batch index in FastAPI (Embedding + Qdrant)
+                        for (Product p : batchProducts) {
+                            importEmbeddingService.logEmbeddingCreation(p.getUuid(), p.getName());
+                        }
+                        importQdrantService.syncProducts(uuids);
+                        
+                        successCount += batchProducts.size();
+                        progressTrackingService.updateProgress(jobId, successCount, duplicateCount, failedCount, "PROCESSING", duplicateDetails, errorDetails);
+                    } catch (Exception ex) {
+                        log.warn("Batch Qdrant indexing failed for {} products, falling back to individual indexing. Error: {}", batchProducts.size(), ex.getMessage());
+                        // Fallback to individual indexing
+                        for (Product p : batchProducts) {
+                            String uuid = p.getUuid();
+                            Integer origRowNum = uuidToRowNum.get(uuid);
+                            String origName = uuidToName.get(uuid);
+                            try {
+                                importQdrantService.syncProduct(uuid);
+                                successCount++;
+                            } catch (Exception individualEx) {
+                                log.error("Individual indexing failed during fallback for product UUID: {}. Rolling back MySQL insert.", uuid, individualEx);
+                                // Roll back MySQL insert
+                                importMySQLService.deleteProductByUuid(uuid);
+                                failedCount++;
+                                errorDetails.add(Map.of(
+                                        "row", origRowNum,
+                                        "item", origName,
+                                        "reason", "Lỗi tạo vector/Qdrant: " + individualEx.getMessage()
+                                ));
+                            }
+                            // Push progress for each fallback retry
+                            progressTrackingService.updateProgress(jobId, successCount, duplicateCount, failedCount, "PROCESSING", duplicateDetails, errorDetails);
+                        }
+                    }
+                    
+                    // Clear batch
+                    batchProducts.clear();
+                    uuidToRowNum.clear();
+                    uuidToName.clear();
+
+                    // Optional: tiny sleep to keep progress updates smooth
+                    try {
+                        Thread.sleep(50);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        log.warn("Background import thread was interrupted");
+                        break;
+                    }
+                }
             }
-        }
 
-        job.setStatus(failedCount == 0 ? "COMPLETED" : (successCount > 0 ? "COMPLETED" : "FAILED"));
-        job.setFinishedAt(LocalDateTime.now());
-        jobRepository.save(job);
+            // Finish
+            log.info("Finished Products Import Job. Job ID: {}, Success: {}, Duplicate: {}, Failed: {}", jobId, successCount, duplicateCount, failedCount);
+            progressTrackingService.completeJob(jobId, successCount, duplicateCount, failedCount, duplicateDetails, errorDetails);
+        });
 
         Map<String, Object> response = new HashMap<>();
         response.put("jobId", jobId);
+        response.put("status", "PROCESSING");
         response.put("totalRows", rows.size());
-        response.put("successRows", successCount);
-        response.put("failedRows", failedCount);
-        response.put("errors", errors);
         return response;
     }
 
@@ -166,388 +254,76 @@ public class ImportServiceImpl implements ImportService {
         job.setStatus("PROCESSING");
         jobRepository.save(job);
 
-        List<Map<String, Object>> errors = new ArrayList<>();
-        int batchSize = 100;
-        int successCount = 0;
-        int failedCount = 0;
+        log.info("Starting asynchronous Categories Import Job. Job ID: {}, Rows to process: {}", jobId, rows.size());
 
-        List<Map<String, Object>> currentBatch = new ArrayList<>();
-        for (int i = 0; i < rows.size(); i++) {
-            currentBatch.add(rows.get(i));
-            if (currentBatch.size() == batchSize || i == rows.size() - 1) {
-                // Execute batch
-                BatchResult batchResult = executeBatch(currentBatch, "CATEGORY");
-                successCount += batchResult.successCount;
-                failedCount += batchResult.failedCount;
-                errors.addAll(batchResult.errors);
+        taskExecutor.execute(() -> {
+            int successCount = 0;
+            int duplicateCount = 0;
+            int failedCount = 0;
+            List<Map<String, Object>> duplicateDetails = new ArrayList<>();
+            List<Map<String, Object>> errorDetails = new ArrayList<>();
 
-                // Update job progress
-                job.setSuccessRows(successCount);
-                job.setFailedRows(failedCount);
-                jobRepository.save(job);
+            for (Map<String, Object> row : rows) {
+                int rowNum = (Integer) row.getOrDefault("rowIndex", 0);
+                String name = (String) row.get("name");
+                if (name == null) {
+                    name = (String) row.get("category_name");
+                }
+                if (name == null) {
+                    name = "Dòng #" + rowNum;
+                }
 
-                currentBatch.clear();
+                try {
+                    // Check duplicate
+                    if (importMySQLService.isCategoryDuplicate(row)) {
+                        duplicateCount++;
+                        duplicateDetails.add(Map.of(
+                                "row", rowNum,
+                                "item", name,
+                                "reason", "Danh mục đã tồn tại trong hệ thống (trùng Tên hoặc Slug)"
+                        ));
+                    } else {
+                        // Save Category
+                        importMySQLService.saveCategoryRow(row);
+                        successCount++;
+                    }
+                } catch (Exception e) {
+                    log.error("Category Insert failed for row: {}", rowNum, e);
+                    failedCount++;
+                    errorDetails.add(Map.of(
+                            "row", rowNum,
+                            "item", name,
+                            "reason", "Lỗi lưu MySQL: " + e.getMessage()
+                    ));
+                }
+
+                // Push progress
+                progressTrackingService.updateProgress(jobId, successCount, duplicateCount, failedCount, "PROCESSING", duplicateDetails, errorDetails);
+
+                try {
+                    Thread.sleep(50);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    log.warn("Background import thread was interrupted");
+                    break;
+                }
             }
-        }
 
-        job.setStatus(failedCount == 0 ? "COMPLETED" : (successCount > 0 ? "COMPLETED" : "FAILED"));
-        job.setFinishedAt(LocalDateTime.now());
-        jobRepository.save(job);
+            // Finish
+            log.info("Finished Categories Import Job. Job ID: {}, Success: {}, Duplicate: {}, Failed: {}", jobId, successCount, duplicateCount, failedCount);
+            progressTrackingService.completeJob(jobId, successCount, duplicateCount, failedCount, duplicateDetails, errorDetails);
+        });
 
         Map<String, Object> response = new HashMap<>();
         response.put("jobId", jobId);
+        response.put("status", "PROCESSING");
         response.put("totalRows", rows.size());
-        response.put("successRows", successCount);
-        response.put("failedRows", failedCount);
-        response.put("errors", errors);
         return response;
     }
 
     @Override
     public Page<ImportJob> getImportHistory(Pageable pageable) {
         return jobRepository.findAllByOrderByStartedAtDesc(pageable);
-    }
-
-    // ── Batch Execution with Fallback ──────────────────────────────────────────
-
-    private static class BatchResult {
-        int successCount = 0;
-        int failedCount = 0;
-        List<Map<String, Object>> errors = new ArrayList<>();
-    }
-
-    private BatchResult executeBatch(List<Map<String, Object>> batch, String entityType) {
-        BatchResult result = new BatchResult();
-        TransactionTemplate template = new TransactionTemplate(transactionManager);
-        template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-
-        try {
-            // Try committing whole batch together
-            template.executeWithoutResult(status -> {
-                for (Map<String, Object> row : batch) {
-                    saveRow(row, entityType);
-                }
-            });
-            result.successCount = batch.size();
-        } catch (Exception e) {
-            log.warn("Batch import failed, falling back to line-by-line processing. Error: {}", e.getMessage());
-            // Fallback to individual rows
-            for (Map<String, Object> row : batch) {
-                try {
-                    template.executeWithoutResult(status -> {
-                        saveRow(row, entityType);
-                    });
-                    result.successCount++;
-                } catch (Exception ex) {
-                    result.failedCount++;
-                    int rowNum = (Integer) row.getOrDefault("rowIndex", 0);
-                    Map<String, Object> err = new HashMap<>();
-                    err.put("row", rowNum);
-                    err.put("reason", ex.getMessage());
-                    result.errors.add(err);
-                }
-            }
-        }
-        return result;
-    }
-
-    private void saveRow(Map<String, Object> row, String entityType) {
-        if ("PRODUCT".equals(entityType)) {
-            saveProductRow(row);
-        } else {
-            saveCategoryRow(row);
-        }
-    }
-
-    private String getString(Map<String, Object> row, String... keys) {
-        for (String key : keys) {
-            Object val = row.get(key);
-            if (val != null) {
-                return String.valueOf(val);
-            }
-        }
-        return null;
-    }
-
-    private Object getObject(Map<String, Object> row, String... keys) {
-        for (String key : keys) {
-            Object val = row.get(key);
-            if (val != null) {
-                return val;
-            }
-        }
-        return null;
-    }
-
-    private List<String> parseImageUrls(Object input) {
-        List<String> list = new ArrayList<>();
-        if (input == null) {
-            return list;
-        }
-        if (input instanceof List) {
-            for (Object item : (List<?>) input) {
-                list.addAll(parseImageUrls(item));
-            }
-        } else {
-            String str = String.valueOf(input).trim();
-            if (!str.isEmpty() && !"null".equalsIgnoreCase(str)) {
-                str = str.replace("[", "").replace("]", "").replace("\"", "").replace("'", "");
-                String[] parts = str.split("[,;|]");
-                for (String part : parts) {
-                    String trimmed = part.trim();
-                    if (!trimmed.isEmpty() && !"null".equalsIgnoreCase(trimmed) && !list.contains(trimmed)) {
-                        list.add(trimmed);
-                    }
-                }
-            }
-        }
-        return list;
-    }
-
-    private void saveCategoryRow(Map<String, Object> row) {
-        String name = getString(row, "name", "category_name");
-        String slug = getString(row, "slug");
-        String description = getString(row, "description");
-        String imageUrl = getString(row, "imageUrl", "category_image_url");
-        String externalId = getString(row, "category_id", "id");
-
-        // 1. Parent resolution
-        Long parentId = null;
-        String pSlug = getString(row, "parent_slug", "parentSlug");
-        String pName = getString(row, "parent_name", "parentName");
-        String pExternalId = getString(row, "parent_id", "parentId");
-
-        if (pSlug != null && !pSlug.isBlank()) {
-            parentId = categoryRepository.findBySlugAndDeletedAtIsNull(pSlug)
-                    .map(Category::getId).orElse(null);
-        }
-        if (parentId == null && pName != null && !pName.isBlank()) {
-            parentId = categoryRepository.findByNameAndDeletedAtIsNull(pName)
-                    .map(Category::getId).orElse(null);
-        }
-        if (parentId == null && pExternalId != null && !pExternalId.isBlank() && !"null".equals(pExternalId)) {
-            parentId = mappingRepository.findByEntityTypeAndSourceSystemAndSourceId("CATEGORY", "Excel", pExternalId)
-                    .map(ImportReferenceMapping::getDbId).orElse(null);
-        }
-
-        // Convert display order
-        int displayOrder = 0;
-        Object orderObj = getObject(row, "sortOrder", "display_order");
-        if (orderObj instanceof Number) {
-            displayOrder = ((Number) orderObj).intValue();
-        } else if (orderObj instanceof String) {
-            try {
-                displayOrder = Integer.parseInt((String) orderObj);
-            } catch (Exception ignored) {}
-        }
-
-        CategoryRequest request = CategoryRequest.builder()
-                .name(name)
-                .slug(slug)
-                .description(description)
-                .imageUrl(imageUrl)
-                .parentId(parentId)
-                .sortOrder(displayOrder)
-                .isActive(true)
-                .build();
-
-        // 2. Duplicate Detection & Upsert
-        Long dbId = null;
-        // Case A: external_source_id mapping exists
-        if (externalId != null && !externalId.isBlank() && !"null".equals(externalId)) {
-            dbId = mappingRepository.findByEntityTypeAndSourceSystemAndSourceId("CATEGORY", "Excel", externalId)
-                    .map(ImportReferenceMapping::getDbId).orElse(null);
-        }
-        // Case B: slug exists
-        if (dbId == null && slug != null && !slug.isBlank()) {
-            dbId = categoryRepository.findBySlugAndDeletedAtIsNull(slug).map(Category::getId).orElse(null);
-        }
-        // Case C: name exists
-        if (dbId == null && name != null && !name.isBlank()) {
-            dbId = categoryRepository.findByNameAndDeletedAtIsNull(name).map(Category::getId).orElse(null);
-        }
-
-        com.ecommerce.nivora.category.dto.response.CategoryResponse response;
-        if (dbId != null) {
-            response = categoryService.update(dbId, request);
-        } else {
-            response = categoryService.create(request);
-        }
-
-        // 3. Save mapping
-        if (externalId != null && !externalId.isBlank() && !"null".equals(externalId)) {
-            ImportReferenceMapping mapping = mappingRepository.findByEntityTypeAndSourceSystemAndSourceId("CATEGORY", "Excel", externalId)
-                    .orElseGet(() -> ImportReferenceMapping.builder()
-                            .entityType("CATEGORY")
-                            .sourceSystem("Excel")
-                            .sourceId(externalId)
-                            .build());
-            mapping.setDbId(response.getId());
-            mappingRepository.save(mapping);
-        }
-    }
-
-    private void saveProductRow(Map<String, Object> row) {
-        String name = getString(row, "name", "product_name");
-        String description = getString(row, "description");
-        String brand = getString(row, "brand");
-        String productUrl = getString(row, "productUrl", "product_url");
-        String externalId = getString(row, "product_id", "id");
-
-        // Base price
-        BigDecimal basePrice = BigDecimal.ZERO;
-        Object priceObj = getObject(row, "basePrice", "price");
-        if (priceObj instanceof Number) {
-            basePrice = BigDecimal.valueOf(((Number) priceObj).doubleValue());
-        } else if (priceObj instanceof String) {
-            try { basePrice = new BigDecimal((String) priceObj); } catch (Exception ignored) {}
-        }
-
-        // Compare price (original_price)
-        BigDecimal comparePrice = null;
-        Object comparePriceObj = getObject(row, "comparePrice", "original_price");
-        if (comparePriceObj instanceof Number) {
-            comparePrice = BigDecimal.valueOf(((Number) comparePriceObj).doubleValue());
-        } else if (comparePriceObj instanceof String) {
-            try { comparePrice = new BigDecimal((String) comparePriceObj); } catch (Exception ignored) {}
-        }
-
-        // Stock
-        int stock = 0;
-        Object stockObj = getObject(row, "stock", "quantity");
-        if (stockObj instanceof Number) {
-            stock = ((Number) stockObj).intValue();
-        } else if (stockObj instanceof String) {
-            try { stock = Integer.parseInt((String) stockObj); } catch (Exception ignored) {}
-        }
-
-        // Category resolution
-        Long categoryId = null;
-        String cSlug = getString(row, "category_slug", "categorySlug");
-        String cName = getString(row, "category_name", "categoryName");
-        String cExternalId = getString(row, "category_id");
-
-        if (cSlug != null && !cSlug.isBlank()) {
-            categoryId = categoryRepository.findBySlugAndDeletedAtIsNull(cSlug)
-                    .map(Category::getId).orElse(null);
-        }
-        if (categoryId == null && cName != null && !cName.isBlank()) {
-            categoryId = categoryRepository.findByNameAndDeletedAtIsNull(cName)
-                    .map(Category::getId).orElse(null);
-        }
-        if (categoryId == null && cExternalId != null && !cExternalId.isBlank() && !"null".equals(cExternalId)) {
-            categoryId = mappingRepository.findByEntityTypeAndSourceSystemAndSourceId("CATEGORY", "Excel", cExternalId)
-                    .map(ImportReferenceMapping::getDbId).orElse(null);
-        }
-
-        if (categoryId == null) {
-            throw new NoSuchElementException("Không thể phân giải danh mục cho sản phẩm: " + name);
-        }
-
-        // Images list parsing
-        String rawImageUrl = getString(row, "imageUrl", "thumbnail_url");
-        List<String> parsedThumbnailUrls = parseImageUrls(rawImageUrl);
-
-        Object imagesObj = getObject(row, "imageUrls", "image_urls");
-        List<String> parsedGalleryUrls = parseImageUrls(imagesObj);
-
-        List<String> imageUrlsList = new ArrayList<>();
-        for (String url : parsedThumbnailUrls) {
-            if (!imageUrlsList.contains(url)) {
-                imageUrlsList.add(url);
-            }
-        }
-        for (String url : parsedGalleryUrls) {
-            if (!imageUrlsList.contains(url)) {
-                imageUrlsList.add(url);
-            }
-        }
-
-        String imageUrl = null;
-        if (!parsedThumbnailUrls.isEmpty()) {
-            imageUrl = parsedThumbnailUrls.get(0);
-        } else if (!imageUrlsList.isEmpty()) {
-            imageUrl = imageUrlsList.get(0);
-        }
-
-        // SKU generation
-        String sku = getString(row, "sku");
-        if (sku == null || sku.isBlank()) {
-            sku = "PRODUCT-" + System.nanoTime();
-        }
-
-        // Create variants payload (Single variant matching standard manual DTO)
-        ProductRequest.VariantRequest variantRequest = ProductRequest.VariantRequest.builder()
-                .sku(sku)
-                .name(name)
-                .price(basePrice)
-                .comparePrice(comparePrice)
-                .color(getString(row, "color"))
-                .size(getString(row, "size"))
-                .stock(stock)
-                .isActive(true)
-                .imageUrl(imageUrl)
-                .build();
-
-        ProductRequest request = ProductRequest.builder()
-                .name(name)
-                .description(description)
-                .brand(brand)
-                .productUrl(productUrl)
-                .categoryId(categoryId)
-                .basePrice(basePrice)
-                .comparePrice(comparePrice)
-                .stock(stock)
-                .imageUrl(imageUrl)
-                .imageUrls(imageUrlsList)
-                .color(getString(row, "color"))
-                .size(getString(row, "size"))
-                .sku(sku)
-                .variants(List.of(variantRequest))
-                .isActive(true)
-                .build();
-
-        // 3. Duplicate Detection & Upsert
-        Long dbId = null;
-        // Priority 1: external_source_id mapping
-        if (externalId != null && !externalId.isBlank() && !"null".equals(externalId)) {
-            dbId = mappingRepository.findByEntityTypeAndSourceSystemAndSourceId("PRODUCT", "Excel", externalId)
-                    .map(ImportReferenceMapping::getDbId).orElse(null);
-        }
-        // Priority 2: SKU
-        if (dbId == null && sku != null && !sku.isBlank()) {
-            dbId = productRepository.findBySkuAndDeletedAtIsNull(sku).map(Product::getId).orElse(null);
-        }
-        // Priority 3: Product URL
-        if (dbId == null && productUrl != null && !productUrl.isBlank()) {
-            dbId = productRepository.findByProductUrlAndDeletedAtIsNull(productUrl).map(Product::getId).orElse(null);
-        }
-        // Priority 4: Name + Brand
-        if (dbId == null && name != null && brand != null && !name.isBlank() && !brand.isBlank()) {
-            List<Product> matches = productRepository.findByNameIgnoreCaseAndBrandIgnoreCaseAndDeletedAtIsNull(name, brand);
-            if (!matches.isEmpty()) {
-                dbId = matches.get(0).getId();
-            }
-        }
-
-        com.ecommerce.nivora.product.dto.response.ProductResponse response;
-        if (dbId != null) {
-            response = productService.update(dbId, request);
-        } else {
-            response = productService.create(request);
-        }
-
-        // 4. Save mapping
-        if (externalId != null && !externalId.isBlank() && !"null".equals(externalId)) {
-            ImportReferenceMapping mapping = mappingRepository.findByEntityTypeAndSourceSystemAndSourceId("PRODUCT", "Excel", externalId)
-                    .orElseGet(() -> ImportReferenceMapping.builder()
-                            .entityType("PRODUCT")
-                            .sourceSystem("Excel")
-                            .sourceId(externalId)
-                            .build());
-            mapping.setDbId(response.getId());
-            mappingRepository.save(mapping);
-        }
     }
 
     // ── Helper method to forward file ──────────────────────────────────────────
@@ -557,7 +333,6 @@ public class ImportServiceImpl implements ImportService {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.MULTIPART_FORM_DATA);
 
-            // Token Relay: Forward admin authentication header
             String authHeader = httpServletRequest.getHeader("Authorization");
             if (authHeader != null) {
                 headers.set("Authorization", authHeader);

@@ -35,6 +35,16 @@ public class ImportJob {
     @Builder.Default
     private Integer failedRows = 0;
 
+    @Column(name = "duplicate_rows")
+    @Builder.Default
+    private Integer duplicateRows = 0;
+
+    @Column(name = "error_details", columnDefinition = "LONGTEXT")
+    private String errorDetails;
+
+    @Column(name = "duplicate_details", columnDefinition = "LONGTEXT")
+    private String duplicateDetails;
+
     @Column(name = "started_at", nullable = false)
     private LocalDateTime startedAt;
 
