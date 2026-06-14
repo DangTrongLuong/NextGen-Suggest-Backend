@@ -36,4 +36,11 @@ public class CheckoutRequest {
 
     private String notes;
     private String currency;
+
+    private String province;
+    private String district;
+    private String ward;
+    private String addressDetail;
+    private Double latitude;
+    private Double longitude;
 }

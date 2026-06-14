@@ -48,6 +48,8 @@ import java.util.stream.Collectors;
 public class ProductServiceImpl implements ProductService {
 
     private final ProductRepository productRepository;
+    private final jakarta.servlet.http.HttpServletRequest httpServletRequest;
+    private final Map<String, Long> viewCooldownCache = new java.util.concurrent.ConcurrentHashMap<>();
     private final CategoryRepository categoryRepository;
     private final ProductVariantRepository variantRepository;
     private final ProductImageRepository imageRepository;
@@ -57,6 +59,7 @@ public class ProductServiceImpl implements ProductService {
     private final ReviewRepository reviewRepository;
     private final UploadService uploadService;
     private final SlugUtils slugUtils;
+    private final ProductIndexService productIndexService;
 
     @Override
     @Transactional(readOnly = true)
@@ -106,11 +109,40 @@ public class ProductServiceImpl implements ProductService {
         return PageResponse.of(page.map(this::toResponse));
     }
 
+    private void incrementProductView(Product product) {
+        String sessionId = httpServletRequest.getHeader("X-Session-Id");
+        if (sessionId == null || sessionId.isBlank()) {
+            sessionId = httpServletRequest.getRemoteAddr();
+        }
+        if (sessionId == null || sessionId.isBlank()) {
+            sessionId = "unknown";
+        }
+        
+        String cacheKey = sessionId + ":" + product.getId();
+        long now = System.currentTimeMillis();
+        Long lastViewTime = viewCooldownCache.putIfAbsent(cacheKey, now);
+        
+        if (lastViewTime != null) {
+            if ((now - lastViewTime) <= 60000) {
+                return;
+            }
+            viewCooldownCache.put(cacheKey, now);
+        }
+        
+        product.setViews(product.getViews() == null ? 1 : product.getViews() + 1);
+        productRepository.save(product);
+        
+        if (java.util.concurrent.ThreadLocalRandom.current().nextInt(100) == 0) {
+            viewCooldownCache.entrySet().removeIf(entry -> (now - entry.getValue()) > 60000);
+        }
+    }
+
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public ProductResponse getById(Long id) {
         Product product = productRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Product", id));
+        incrementProductView(product);
         return toResponse(product);
     }
 
@@ -123,10 +155,11 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public ProductResponse getBySlug(String slug) {
         Product product = productRepository.findBySlugAndDeletedAtIsNull(slug)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + slug));
+        incrementProductView(product);
         return toResponse(product);
     }
 
@@ -148,6 +181,13 @@ public class ProductServiceImpl implements ProductService {
     @Transactional(readOnly = true)
     public List<ProductResponse> getNewArrivals() {
         return productRepository.findByIsNewTrueAndIsActiveTrueAndDeletedAtIsNull(PageRequest.of(0, 8))
+                .stream().map(this::toResponse).collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProductResponse> getTrendingFallback(int limit) {
+        return productRepository.findTrendingFallback(PageRequest.of(0, limit))
                 .stream().map(this::toResponse).collect(Collectors.toList());
     }
 
@@ -206,6 +246,33 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Map<String, ProductResponse> getActiveProductsByUuids(Collection<String> uuids) {
+        if (uuids == null || uuids.isEmpty()) {
+            return Map.of();
+        }
+
+        List<String> uuidList = uuids.stream()
+                .filter(s -> s != null && !s.isBlank())
+                .distinct()
+                .collect(Collectors.toList());
+
+        if (uuidList.isEmpty()) {
+            return Map.of();
+        }
+
+        List<Product> products = productRepository.findByUuidInAndIsActiveTrueAndDeletedAtIsNull(uuidList);
+        Map<String, ProductResponse> result = new HashMap<>();
+        for (Product product : products) {
+            if (product.getUuid() != null) {
+                result.put(product.getUuid(), toResponse(product));
+            }
+        }
+        return result;
+    }
+
+
+    @Override
     @Transactional
     public ProductResponse create(ProductRequest request) {
         Category category = categoryRepository.findById(request.getCategoryId())
@@ -228,6 +295,7 @@ public class ProductServiceImpl implements ProductService {
                 .shortDescription(request.getShortDescription())
                 .description(request.getDescription())
                 .brand(request.getBrand())
+                .productUrl(request.getProductUrl())
                 .taxRate(request.getTaxRate() != null ? request.getTaxRate() : BigDecimal.ZERO)
                 .weight(request.getWeight())
                 .isActive(request.getIsActive())
@@ -304,6 +372,7 @@ public class ProductServiceImpl implements ProductService {
         product.setVariants(variants);
 
         productRepository.save(product);
+        productIndexService.indexProductAsync(product.getUuid());
         return toResponse(product);
     }
 
@@ -325,6 +394,7 @@ public class ProductServiceImpl implements ProductService {
         product.setShortDescription(request.getShortDescription());
         product.setDescription(request.getDescription());
         product.setBrand(request.getBrand());
+        product.setProductUrl(request.getProductUrl());
         product.setTaxRate(request.getTaxRate() != null ? request.getTaxRate() : BigDecimal.ZERO);
         product.setWeight(request.getWeight());
         product.setSeoTitle(request.getSeoTitle());
@@ -449,6 +519,7 @@ public class ProductServiceImpl implements ProductService {
         }
 
         productRepository.save(product);
+        productIndexService.indexProductAsync(product.getUuid());
         return toResponse(product);
     }
 
@@ -457,6 +528,8 @@ public class ProductServiceImpl implements ProductService {
     public void delete(Long id) {
         Product product = productRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Product", id));
+
+        productIndexService.deleteProductAsync(product.getUuid());
 
         // Fast path: mark deleted immediately so UI can update after response,
         // then clean up heavy relations in a background task.
@@ -544,6 +617,7 @@ public class ProductServiceImpl implements ProductService {
                 .brand(p.getBrand())
                 .sku(p.getSku())
                 .stock(p.getStock())
+                .views(p.getViews())
                 .basePrice(p.getBasePrice())
                 .comparePrice(p.getComparePrice())
                 .taxRate(p.getTaxRate())

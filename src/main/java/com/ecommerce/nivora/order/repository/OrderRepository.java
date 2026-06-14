@@ -54,4 +54,31 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
            "GROUP BY oi.product.uuid " +
            "ORDER BY count DESC")
     List<String> findTopProductsByLocation(@Param("city") String city, org.springframework.data.domain.Pageable pageable);
+
+    @Query("SELECT oi.product.id, COUNT(oi.id) as count " +
+           "FROM OrderItem oi " +
+           "JOIN oi.order o " +
+           "JOIN o.shippingAddress sa " +
+           "WHERE sa.ward IS NOT NULL AND LOWER(sa.ward) = LOWER(:ward) AND o.status <> 'CANCELLED' " +
+           "GROUP BY oi.product.id " +
+           "ORDER BY count DESC")
+    List<Object[]> findTopProductsByWard(@Param("ward") String ward, Pageable pageable);
+
+    @Query("SELECT oi.product.id, COUNT(oi.id) as count " +
+           "FROM OrderItem oi " +
+           "JOIN oi.order o " +
+           "JOIN o.shippingAddress sa " +
+           "WHERE sa.district IS NOT NULL AND LOWER(sa.district) = LOWER(:district) AND o.status <> 'CANCELLED' " +
+           "GROUP BY oi.product.id " +
+           "ORDER BY count DESC")
+    List<Object[]> findTopProductsByDistrict(@Param("district") String district, Pageable pageable);
+
+    @Query("SELECT oi.product.id, COUNT(oi.id) as count " +
+           "FROM OrderItem oi " +
+           "JOIN oi.order o " +
+           "JOIN o.shippingAddress sa " +
+           "WHERE sa.province IS NOT NULL AND LOWER(sa.province) = LOWER(:province) AND o.status <> 'CANCELLED' " +
+           "GROUP BY oi.product.id " +
+           "ORDER BY count DESC")
+    List<Object[]> findTopProductsByProvince(@Param("province") String province, Pageable pageable);
 }

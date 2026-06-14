@@ -42,6 +42,7 @@ public class RecommendationServiceImpl implements RecommendationService {
     private final OrderRepository orderRepository;
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
+    private final com.ecommerce.nivora.user.repository.UserAddressRepository userAddressRepository;
 
     @Value("${app.fastapi-url}")
     private String fastApiUrl;
@@ -60,7 +61,7 @@ public class RecommendationServiceImpl implements RecommendationService {
         // 2. Lấy danh sách Trending Today từ Cache
         List<ProductResponse> trending = getTrendingFromCache("trending_today");
         if (trending.isEmpty()) {
-            trending = bestSellers; // Fallback
+            trending = productService.getTrendingFallback(8); // Fallback to actual highest view/activity products
         }
 
         // 3. Lấy Tiếp tục xem (Recent Viewed)
@@ -149,7 +150,7 @@ public class RecommendationServiceImpl implements RecommendationService {
                 log.info("[Recommendation] userId: {}, cacheKey: recommend:user:{}:homepage, viewHistory: {}, recommendationIds: {}",
                         userId, userId, viewedUuids, recommendedUuids);
 
-                Map<String, ProductResponse> hydratedProducts = productService.getActiveProductsBySkus(recommendedUuids);
+                Map<String, ProductResponse> hydratedProducts = productService.getActiveProductsByUuids(recommendedUuids);
                 
                 // Bản đồ ánh xạ kết quả FastAPI để sao chép score & reason nhanh
                 Map<String, FastApiProductResult> apiResultMap = apiResponse.getRecommendations().stream()
@@ -240,7 +241,7 @@ public class RecommendationServiceImpl implements RecommendationService {
                     .collect(Collectors.toList());
         }
 
-        Map<String, ProductResponse> hydratedProducts = productService.getActiveProductsBySkus(productUuids);
+        Map<String, ProductResponse> hydratedProducts = productService.getActiveProductsByUuids(productUuids);
         return productUuids.stream()
                 .map(uuid -> {
                     ProductResponse p = hydratedProducts.get(uuid);
@@ -280,7 +281,7 @@ public class RecommendationServiceImpl implements RecommendationService {
             List<String> recentUuids = behaviorEventRepository.findRecentViewedProductUuidsByUserId(
                     userId, PageRequest.of(0, 10));
             if (!recentUuids.isEmpty()) {
-                Map<String, ProductResponse> hydrated = productService.getActiveProductsBySkus(recentUuids);
+                Map<String, ProductResponse> hydrated = productService.getActiveProductsByUuids(recentUuids);
                 return recentUuids.stream()
                         .map(hydrated::get)
                         .filter(Objects::nonNull)
@@ -299,7 +300,7 @@ public class RecommendationServiceImpl implements RecommendationService {
             List<String> sessionUuids = behaviorEventRepository.findRecentViewedProductUuidsBySessionId(
                     sessionId, PageRequest.of(0, 10));
             if (!sessionUuids.isEmpty()) {
-                Map<String, ProductResponse> hydrated = productService.getActiveProductsBySkus(sessionUuids);
+                Map<String, ProductResponse> hydrated = productService.getActiveProductsByUuids(sessionUuids);
                 return sessionUuids.stream()
                         .map(hydrated::get)
                         .filter(Objects::nonNull)
@@ -328,5 +329,107 @@ public class RecommendationServiceImpl implements RecommendationService {
             log.error("Error fetching purchased product UUIDs for user={}", userId, e);
             return Collections.emptyList();
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProductResponse> getLocationBasedRecommendations(Long userId, int limit) {
+        log.info("Fetching location-based recommendations for user={}, limit={}", userId, limit);
+        
+        com.ecommerce.nivora.user.entity.UserAddress defaultAddr = null;
+        if (userId != null) {
+            defaultAddr = userAddressRepository.findByUserIdAndIsDefaultTrueAndDeletedAtIsNull(userId).orElse(null);
+        }
+        
+        List<ProductResponse> resultList = new ArrayList<>();
+        
+        if (defaultAddr != null && 
+            ((defaultAddr.getWard() != null && !defaultAddr.getWard().isBlank()) || 
+             (defaultAddr.getDistrict() != null && !defaultAddr.getDistrict().isBlank()) || 
+             (defaultAddr.getProvince() != null && !defaultAddr.getProvince().isBlank()))) {
+             
+            String ward = defaultAddr.getWard();
+            String district = defaultAddr.getDistrict();
+            String province = defaultAddr.getProvince();
+            
+            List<Long> wardPids = new ArrayList<>();
+            List<Long> districtPids = new ArrayList<>();
+            List<Long> provincePids = new ArrayList<>();
+            
+            if (ward != null && !ward.isBlank()) {
+                orderRepository.findTopProductsByWard(ward, PageRequest.of(0, limit)).forEach(row -> {
+                    wardPids.add((Long) row[0]);
+                });
+            }
+            if (district != null && !district.isBlank()) {
+                orderRepository.findTopProductsByDistrict(district, PageRequest.of(0, limit)).forEach(row -> {
+                    districtPids.add((Long) row[0]);
+                });
+            }
+            if (province != null && !province.isBlank()) {
+                orderRepository.findTopProductsByProvince(province, PageRequest.of(0, limit)).forEach(row -> {
+                    provincePids.add((Long) row[0]);
+                });
+            }
+            
+            List<Long> orderedPids = new ArrayList<>();
+            Map<Long, String> pidToReason = new HashMap<>();
+            
+            for (Long pid : wardPids) {
+                if (!orderedPids.contains(pid)) {
+                    orderedPids.add(pid);
+                    pidToReason.put(pid, "🔥 Bán chạy tại " + ward);
+                }
+            }
+            
+            for (Long pid : districtPids) {
+                if (orderedPids.size() >= limit) break;
+                if (!orderedPids.contains(pid)) {
+                    orderedPids.add(pid);
+                    pidToReason.put(pid, "🔥 Bán chạy tại " + district);
+                }
+            }
+            
+            for (Long pid : provincePids) {
+                if (orderedPids.size() >= limit) break;
+                if (!orderedPids.contains(pid)) {
+                    orderedPids.add(pid);
+                    pidToReason.put(pid, "🔥 Bán chạy tại " + province);
+                }
+            }
+            
+            if (!orderedPids.isEmpty()) {
+                List<ProductResponse> hydrated = productService.getProductsByIds(orderedPids);
+                Map<Long, ProductResponse> productMap = hydrated.stream()
+                        .collect(Collectors.toMap(ProductResponse::getId, p -> p));
+                        
+                for (Long pid : orderedPids) {
+                    ProductResponse p = productMap.get(pid);
+                    if (p != null) {
+                        p.setRecommendationReason(pidToReason.get(pid));
+                        p.setRecommendationScore(0.95);
+                        resultList.add(p);
+                    }
+                }
+            }
+        }
+        
+        if (resultList.size() < limit) {
+            List<ProductResponse> nationwide = getTrendingFromCache("trending_today");
+            if (nationwide.isEmpty()) {
+                nationwide = productService.getTrendingFallback(limit);
+            }
+            
+            for (ProductResponse p : nationwide) {
+                if (resultList.size() >= limit) break;
+                if (resultList.stream().noneMatch(existing -> existing.getId().equals(p.getId()))) {
+                    p.setRecommendationReason("🔥 Sản phẩm nổi bật toàn quốc");
+                    p.setRecommendationScore(0.85);
+                    resultList.add(p);
+                }
+            }
+        }
+        
+        return resultList;
     }
 }

@@ -44,6 +44,24 @@ public class ShippingAddress {
     @Builder.Default
     private String countryCode = "VN";
 
+    @Column(name = "province", length = 100)
+    private String province;
+
+    @Column(name = "district", length = 100)
+    private String district;
+
+    @Column(name = "ward", length = 100)
+    private String ward;
+
+    @Column(name = "address_detail", length = 255)
+    private String addressDetail;
+
+    @Column(name = "latitude")
+    private Double latitude;
+
+    @Column(name = "longitude")
+    private Double longitude;
+
     @Column(name = "tracking_number", length = 100)
     private String trackingNumber;
 

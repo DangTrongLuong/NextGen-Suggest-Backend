@@ -23,6 +23,7 @@ public class ProductResponse {
     private String brand;
     private String sku;
     private Integer stock;
+    private Integer views;
     private BigDecimal basePrice;
     private BigDecimal comparePrice;
     private BigDecimal taxRate;

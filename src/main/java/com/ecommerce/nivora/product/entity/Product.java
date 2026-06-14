@@ -51,6 +51,9 @@ public class Product {
     @Column(length = 100)
     private String brand;
 
+    @Column(name = "product_url", length = 500)
+    private String productUrl;
+
     @Formula("(SELECT COALESCE(MIN(v.price), 0) FROM product_variants v WHERE v.product_id = id AND v.is_active = true AND v.deleted_at IS NULL)")
     private BigDecimal basePrice;
 
@@ -88,6 +91,14 @@ public class Product {
     @Column(name = "is_best_seller", nullable = false)
     @Builder.Default
     private Boolean isBestSeller = false;
+
+    @Column(name = "views", nullable = false, columnDefinition = "int default 0")
+    @Builder.Default
+    private Integer views = 0;
+
+    @Column(name = "sales_count", nullable = false, columnDefinition = "bigint default 0")
+    @Builder.Default
+    private Long salesCount = 0L;
 
     @Formula("(SELECT COALESCE(SUM(i.quantity), 0) FROM product_variants v JOIN inventories i ON i.variant_id = v.id WHERE v.product_id = id AND v.is_active = true AND v.deleted_at IS NULL)")
     private Integer stock;
