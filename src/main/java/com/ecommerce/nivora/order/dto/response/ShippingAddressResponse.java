@@ -16,4 +16,11 @@ public class ShippingAddressResponse {
     private String countryCode;
     private String trackingNumber;
     private String carrier;
+    
+    private String province;
+    private String district;
+    private String ward;
+    private String addressDetail;
+    private Double latitude;
+    private Double longitude;
 }

@@ -62,4 +62,25 @@ public class RecommendationController {
         List<ProductResponse> response = recommendationService.getRecommendationsByLocation(location, limit);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
+
+    @GetMapping("/location-based")
+    @Operation(summary = "Get location-based product recommendations for current authenticated user or nationwide")
+    public ResponseEntity<ApiResponse<List<ProductResponse>>> getLocationBasedRecommendations(
+            @RequestParam(defaultValue = "8") int limit
+    ) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        Long userId = null;
+        if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
+            try {
+                User user = userRepository.findActiveByEmail(auth.getName()).orElse(null);
+                if (user != null) {
+                    userId = user.getId();
+                }
+            } catch (Exception e) {
+                // Ignore
+            }
+        }
+        List<ProductResponse> response = recommendationService.getLocationBasedRecommendations(userId, limit);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
 }

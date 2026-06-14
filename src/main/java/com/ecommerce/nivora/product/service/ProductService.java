@@ -24,9 +24,11 @@ public interface ProductService {
     List<ProductResponse> getFeatured();
     List<ProductResponse> getBestSellers();
     List<ProductResponse> getNewArrivals();
+    List<ProductResponse> getTrendingFallback(int limit);
     List<ProductResponse> getRelated(Long productId, int limit);
     List<ProductResponse> getProductsByIds(List<Long> ids);
     Map<String, ProductResponse> getActiveProductsBySkus(Collection<String> skus);
+    Map<String, ProductResponse> getActiveProductsByUuids(Collection<String> uuids);
     ProductResponse create(ProductRequest request);
     ProductResponse update(Long id, ProductRequest request);
     void delete(Long id);

@@ -49,6 +49,7 @@ public class OrderServiceImpl implements OrderService {
     private final UserRepository userRepository;
     private final InventoryRepository inventoryRepository;
     private final CartService cartService;
+    private final com.ecommerce.nivora.product.repository.ProductRepository productRepository;
 
     private static final AtomicInteger SEQ = new AtomicInteger(1);
 
@@ -130,12 +131,18 @@ public class OrderServiceImpl implements OrderService {
                 .order(order)
                 .recipientName(request.getRecipientName())
                 .phone(request.getPhone())
-                .addressLine1(request.getAddressLine1())
+                .addressLine1(request.getAddressDetail() != null ? request.getAddressDetail() : request.getAddressLine1())
                 .addressLine2(request.getAddressLine2())
-                .city(request.getCity())
+                .city(request.getProvince() != null ? request.getProvince() : request.getCity())
                 .state(request.getState())
-                .postalCode(request.getPostalCode())
-                .countryCode(request.getCountryCode())
+                .postalCode(request.getPostalCode() != null ? request.getPostalCode() : "100000")
+                .countryCode(request.getCountryCode() != null ? request.getCountryCode() : "VN")
+                .province(request.getProvince())
+                .district(request.getDistrict())
+                .ward(request.getWard())
+                .addressDetail(request.getAddressDetail())
+                .latitude(request.getLatitude())
+                .longitude(request.getLongitude())
                 .build();
         order.setShippingAddress(shippingAddress);
 
@@ -206,12 +213,17 @@ public class OrderServiceImpl implements OrderService {
             case SHIPPING -> order.setShippedAt(LocalDateTime.now());
             case DELIVERED -> {
                 order.setDeliveredAt(LocalDateTime.now());
-                // Deduct inventory on delivery
+                // Deduct inventory on delivery & increment sales count
                 order.getItems().forEach(item -> {
                     inventoryRepository.findByVariantId(item.getVariant().getId()).ifPresent(inv -> {
                         inv.setQuantity(inv.getQuantity() - item.getQuantity());
                         inv.setReservedQuantity(Math.max(0, inv.getReservedQuantity() - item.getQuantity()));
                         inventoryRepository.save(inv);
+                    });
+
+                    productRepository.findById(item.getProduct().getId()).ifPresent(p -> {
+                        p.setSalesCount((p.getSalesCount() == null ? 0L : p.getSalesCount()) + item.getQuantity());
+                        productRepository.save(p);
                     });
                 });
                 // Mark payment completed
@@ -345,6 +357,12 @@ public class OrderServiceImpl implements OrderService {
                 .countryCode(s.getCountryCode())
                 .trackingNumber(s.getTrackingNumber())
                 .carrier(s.getCarrier())
+                .province(s.getProvince())
+                .district(s.getDistrict())
+                .ward(s.getWard())
+                .addressDetail(s.getAddressDetail())
+                .latitude(s.getLatitude())
+                .longitude(s.getLongitude())
                 .build();
     }
 

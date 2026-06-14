@@ -9,4 +9,5 @@ import java.util.List;
 public interface RecommendationService {
     HomepageRecommendationResponse getHomepageRecommendations(String sessionId, Long userId, List<Long> guestViewedIds);
     List<ProductResponse> getRecommendationsByLocation(String location, int limit);
+    List<ProductResponse> getLocationBasedRecommendations(Long userId, int limit);
 }

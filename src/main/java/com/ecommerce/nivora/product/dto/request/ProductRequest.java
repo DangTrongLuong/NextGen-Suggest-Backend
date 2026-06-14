@@ -32,6 +32,9 @@ public class ProductRequest {
     @Size(max = 100)
     private String brand;
 
+    @Size(max = 500)
+    private String productUrl;
+
     @Size(max = 100)
     private String sku;
 
