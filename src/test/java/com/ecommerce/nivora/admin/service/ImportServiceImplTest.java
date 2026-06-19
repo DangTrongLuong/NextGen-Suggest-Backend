@@ -4,6 +4,8 @@ import com.ecommerce.nivora.admin.entity.ImportJob;
 import com.ecommerce.nivora.admin.repository.ImportJobRepository;
 import com.ecommerce.nivora.category.entity.Category;
 import com.ecommerce.nivora.category.repository.CategoryRepository;
+import com.ecommerce.nivora.category.entity.CategoryMain;
+import com.ecommerce.nivora.category.repository.CategoryMainRepository;
 import com.ecommerce.nivora.common.entity.ImportReferenceMapping;
 import com.ecommerce.nivora.common.repository.ImportReferenceMappingRepository;
 import com.ecommerce.nivora.product.entity.Product;
@@ -30,6 +32,9 @@ public class ImportServiceImplTest {
 
     @Autowired
     private CategoryRepository categoryRepository;
+
+    @Autowired
+    private CategoryMainRepository categoryMainRepository;
 
     @Autowired
     private ProductRepository productRepository;
@@ -96,8 +101,14 @@ public class ImportServiceImplTest {
             } catch (Exception ignored) {}
         }
 
-        // Delete test categories
+        // Delete test categories by slug
         categoryRepository.findBySlugAndDeletedAtIsNull("new-child-category")
+                .ifPresent(c -> {
+                    c.setParent(null);
+                    categoryRepository.save(c);
+                    categoryRepository.delete(c);
+                });
+        categoryRepository.findBySlugAndDeletedAtIsNull("new-child-category-with-main")
                 .ifPresent(c -> {
                     c.setParent(null);
                     categoryRepository.save(c);
@@ -106,16 +117,18 @@ public class ImportServiceImplTest {
         categoryRepository.findBySlugAndDeletedAtIsNull("new-parent-category")
                 .ifPresent(categoryRepository::delete);
 
-        if (leafCategory != null) {
-            categoryRepository.findById(leafCategory.getId()).ifPresent(c -> {
-                c.setParent(null);
-                categoryRepository.save(c);
-                categoryRepository.delete(c);
-            });
-        }
-        if (parentCategory != null) {
-            categoryRepository.findById(parentCategory.getId()).ifPresent(categoryRepository::delete);
-        }
+        categoryRepository.findBySlugAndDeletedAtIsNull("leaf-test-category")
+                .ifPresent(c -> {
+                    c.setParent(null);
+                    categoryRepository.save(c);
+                    categoryRepository.delete(c);
+                });
+        categoryRepository.findBySlugAndDeletedAtIsNull("parent-test-category")
+                .ifPresent(categoryRepository::delete);
+
+        // Delete test CategoryMain records
+        categoryMainRepository.findByNameAndDeletedAtIsNull("Thời Trang Test")
+                .ifPresent(categoryMainRepository::delete);
 
         // Clean mapping table
         mappingRepository.deleteAll();
@@ -147,11 +160,13 @@ public class ImportServiceImplTest {
         List<Map<String, Object>> rows = List.of(parentRow, childRow);
 
         // Execute Confirm Categories Import
-        Map<String, Object> result = importService.confirmCategoriesImport(categoryJob.getId(), rows, "admin");
+        importService.confirmCategoriesImport(categoryJob.getId(), rows, "admin");
+        ImportJob finishedJob = waitForJob(categoryJob.getId());
 
-        assertNotNull(result);
-        assertEquals(2, result.get("successRows"));
-        assertEquals(0, result.get("failedRows"));
+        assertNotNull(finishedJob);
+        assertEquals("COMPLETED", finishedJob.getStatus());
+        assertEquals(2, finishedJob.getSuccessRows());
+        assertEquals(0, finishedJob.getFailedRows());
 
         // Verify categories created in Database
         Optional<Category> parentOpt = categoryRepository.findBySlugAndDeletedAtIsNull("new-parent-category");
@@ -166,12 +181,12 @@ public class ImportServiceImplTest {
 
         // Verify reference mappings stored
         Optional<ImportReferenceMapping> parentMapping = mappingRepository
-                .findByEntityTypeAndSourceSystemAndSourceId("CATEGORY", "Excel", "ext-cat-parent");
+                .findByEntityTypeAndSourceSystemAndSourceId("CATEGORY", "Excel-Job-" + categoryJob.getId(), "ext-cat-parent");
         assertTrue(parentMapping.isPresent());
         assertEquals(parentOpt.get().getId(), parentMapping.get().getDbId());
 
         Optional<ImportReferenceMapping> childMapping = mappingRepository
-                .findByEntityTypeAndSourceSystemAndSourceId("CATEGORY", "Excel", "ext-cat-child");
+                .findByEntityTypeAndSourceSystemAndSourceId("CATEGORY", "Excel-Job-" + categoryJob.getId(), "ext-cat-child");
         assertTrue(childMapping.isPresent());
         assertEquals(childOpt.get().getId(), childMapping.get().getDbId());
     }
@@ -194,11 +209,13 @@ public class ImportServiceImplTest {
         List<Map<String, Object>> rows = List.of(prodRow1);
 
         // Execute Product Import
-        Map<String, Object> result = importService.confirmProductsImport(productJob.getId(), rows, "admin");
+        importService.confirmProductsImport(productJob.getId(), rows, "admin");
+        ImportJob finishedJob = waitForJob(productJob.getId());
 
-        assertNotNull(result);
-        assertEquals(1, result.get("successRows"));
-        assertEquals(0, result.get("failedRows"));
+        assertNotNull(finishedJob);
+        assertEquals("COMPLETED", finishedJob.getStatus());
+        assertEquals(1, finishedJob.getSuccessRows());
+        assertEquals(0, finishedJob.getFailedRows());
 
         // Verify product exists in database
         Optional<Product> prodOpt = productRepository.findBySkuAndDeletedAtIsNull("SKU-PROD-A");
@@ -208,7 +225,7 @@ public class ImportServiceImplTest {
 
         // Verify Import Reference Mapping
         Optional<ImportReferenceMapping> refMapping = mappingRepository
-                .findByEntityTypeAndSourceSystemAndSourceId("PRODUCT", "Excel", "ext-prod-a");
+                .findByEntityTypeAndSourceSystemAndSourceId("PRODUCT", "Excel-Job-" + productJob.getId(), "ext-prod-a");
         assertTrue(refMapping.isPresent());
         assertEquals(prodOpt.get().getId(), refMapping.get().getDbId());
 
@@ -225,15 +242,20 @@ public class ImportServiceImplTest {
         prodRow1Update.put("sku", "SKU-PROD-A");
         prodRow1Update.put("category_slug", "leaf-test-category");
 
-        Map<String, Object> updateResult = importService.confirmProductsImport(productJob.getId(), List.of(prodRow1Update), "admin");
-        assertEquals(1, updateResult.get("successRows"));
-        assertEquals(0, updateResult.get("failedRows"));
+        importService.confirmProductsImport(productJob.getId(), List.of(prodRow1Update), "admin");
+        ImportJob finishedUpdateJob = waitForJob(productJob.getId());
 
-        // Verify database reflects the update (no new product was created, same ID updated)
+        assertNotNull(finishedUpdateJob);
+        assertEquals("COMPLETED", finishedUpdateJob.getStatus());
+        assertEquals(0, finishedUpdateJob.getSuccessRows());
+        assertEquals(1, finishedUpdateJob.getDuplicateRows());
+        assertEquals(0, finishedUpdateJob.getFailedRows());
+
+        // Verify database did not change (original product still has original description)
         Optional<Product> updatedProdOpt = productRepository.findBySkuAndDeletedAtIsNull("SKU-PROD-A");
         assertTrue(updatedProdOpt.isPresent());
         assertEquals(prodOpt.get().getId(), updatedProdOpt.get().getId());
-        assertEquals("Updated Description", updatedProdOpt.get().getDescription());
+        assertEquals("Test Product A Description", updatedProdOpt.get().getDescription());
     }
 
     @Test
@@ -262,17 +284,18 @@ public class ImportServiceImplTest {
         List<Map<String, Object>> rows = List.of(validRow, invalidRow);
 
         // Execute batch import
-        Map<String, Object> result = importService.confirmProductsImport(productJob.getId(), rows, "admin");
+        importService.confirmProductsImport(productJob.getId(), rows, "admin");
+        ImportJob finishedJob = waitForJob(productJob.getId());
 
-        assertNotNull(result);
-        assertEquals(1, result.get("successRows"));
-        assertEquals(1, result.get("failedRows"));
+        assertNotNull(finishedJob);
+        assertEquals("COMPLETED", finishedJob.getStatus());
+        assertEquals(1, finishedJob.getSuccessRows());
+        assertEquals(1, finishedJob.getFailedRows());
 
         // Check the errors list returned
-        List<Map<String, Object>> errors = (List<Map<String, Object>>) result.get("errors");
-        assertEquals(1, errors.size());
-        assertEquals(3, errors.get(0).get("row"));
-        assertTrue(((String) errors.get(0).get("reason")).contains("Không thể phân giải danh mục"));
+        assertNotNull(finishedJob.getErrorDetails());
+        assertTrue(finishedJob.getErrorDetails().contains("Không thể phân giải danh mục"));
+        assertTrue(finishedJob.getErrorDetails().contains("\"row\":3"));
 
         // Verify that the valid product is saved in database
         Optional<Product> validProd = productRepository.findBySkuAndDeletedAtIsNull("SKU-PROD-B");
@@ -282,5 +305,68 @@ public class ImportServiceImplTest {
         // Verify that the invalid product is NOT saved in database
         Optional<Product> invalidProd = productRepository.findBySkuAndDeletedAtIsNull("SKU-PROD-C");
         assertFalse(invalidProd.isPresent());
+    }
+
+    @Test
+    void testConfirmCategoriesImport_WithCategoryMain_Success() {
+        // Delete first to ensure fresh state
+        categoryRepository.findBySlugAndDeletedAtIsNull("new-child-category-with-main")
+                .ifPresent(categoryRepository::delete);
+        categoryMainRepository.findByNameAndDeletedAtIsNull("Thời Trang Test")
+                .ifPresent(categoryMainRepository::delete);
+
+        // Prepare rows for Category import with a category_main column
+        Map<String, Object> row = new HashMap<>();
+        row.put("rowIndex", 2);
+        row.put("category_id", "ext-cat-with-main");
+        row.put("name", "New Child Category with Main");
+        row.put("slug", "new-child-category-with-main");
+        row.put("description", "Category with Main description");
+        row.put("category_main", "Thời Trang Test");
+        row.put("display_order", 1);
+
+        List<Map<String, Object>> rows = List.of(row);
+
+        // Execute Confirm Categories Import
+        importService.confirmCategoriesImport(categoryJob.getId(), rows, "admin");
+        ImportJob finishedJob = waitForJob(categoryJob.getId());
+
+        assertNotNull(finishedJob);
+        assertEquals("COMPLETED", finishedJob.getStatus());
+        assertEquals(1, finishedJob.getSuccessRows());
+        assertEquals(0, finishedJob.getFailedRows());
+
+        // Verify CategoryMain is created in Database
+        Optional<CategoryMain> mainOpt = categoryMainRepository.findByNameAndDeletedAtIsNull("Thời Trang Test");
+        assertTrue(mainOpt.isPresent());
+        assertEquals("Thời Trang Test", mainOpt.get().getName());
+        assertNotNull(mainOpt.get().getSlug());
+
+        // Verify Category created in Database has CategoryMain linked
+        Optional<Category> catOpt = categoryRepository.findBySlugAndDeletedAtIsNull("new-child-category-with-main");
+        assertTrue(catOpt.isPresent());
+        assertNotNull(catOpt.get().getCategoryMain());
+        assertEquals(mainOpt.get().getId(), catOpt.get().getCategoryMain().getId());
+
+        // Clean up
+        categoryRepository.delete(catOpt.get());
+        categoryMainRepository.delete(mainOpt.get());
+    }
+
+    private ImportJob waitForJob(Long jobId) {
+        long start = System.currentTimeMillis();
+        while (System.currentTimeMillis() - start < 10000) { // 10 seconds timeout
+            ImportJob job = jobRepository.findById(jobId).orElse(null);
+            if (job != null && !List.of("PENDING", "PROCESSING").contains(job.getStatus())) {
+                return job;
+            }
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        return jobRepository.findById(jobId).orElse(null);
     }
 }

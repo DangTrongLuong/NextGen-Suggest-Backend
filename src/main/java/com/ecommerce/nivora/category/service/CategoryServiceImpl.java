@@ -3,7 +3,9 @@ package com.ecommerce.nivora.category.service;
 import com.ecommerce.nivora.category.dto.request.CategoryRequest;
 import com.ecommerce.nivora.category.dto.response.CategoryResponse;
 import com.ecommerce.nivora.category.entity.Category;
+import com.ecommerce.nivora.category.entity.CategoryMain;
 import com.ecommerce.nivora.category.repository.CategoryRepository;
+import com.ecommerce.nivora.category.repository.CategoryMainRepository;
 import com.ecommerce.nivora.common.dto.response.PageResponse;
 import com.ecommerce.nivora.common.utils.SlugUtils;
 import com.ecommerce.nivora.exception.ConflictException;
@@ -26,6 +28,7 @@ import java.util.stream.Collectors;
 public class CategoryServiceImpl implements CategoryService {
 
     private final CategoryRepository categoryRepository;
+    private final CategoryMainRepository categoryMainRepository;
     private final SlugUtils slugUtils;
 
     @Override
@@ -91,6 +94,12 @@ public class CategoryServiceImpl implements CategoryService {
                     .orElseThrow(() -> new ResourceNotFoundException("Parent category", request.getParentId()));
         }
 
+        CategoryMain categoryMain = null;
+        if (request.getCategoryMainId() != null) {
+            categoryMain = categoryMainRepository.findById(request.getCategoryMainId())
+                    .orElseThrow(() -> new ResourceNotFoundException("CategoryMain", request.getCategoryMainId()));
+        }
+
         Category category = Category.builder()
                 .name(request.getName())
                 .slug(slug)
@@ -98,6 +107,7 @@ public class CategoryServiceImpl implements CategoryService {
                 .imageUrl(request.getImageUrl())
                 .icon(request.getIcon())
                 .parent(parent)
+                .categoryMain(categoryMain)
                 .displayOrder(request.getSortOrder())
                 .isActive(request.getIsActive())
                 .seoTitle(request.getSeoTitle())
@@ -145,6 +155,14 @@ public class CategoryServiceImpl implements CategoryService {
             category.setParent(null);
         }
 
+        if (request.getCategoryMainId() != null) {
+            CategoryMain categoryMain = categoryMainRepository.findById(request.getCategoryMainId())
+                    .orElseThrow(() -> new ResourceNotFoundException("CategoryMain", request.getCategoryMainId()));
+            category.setCategoryMain(categoryMain);
+        } else {
+            category.setCategoryMain(null);
+        }
+
         categoryRepository.save(category);
         return toResponse(category);
     }
@@ -170,6 +188,8 @@ public class CategoryServiceImpl implements CategoryService {
                 .isActive(c.getIsActive())
                 .parentId(c.getParent() != null ? c.getParent().getId() : null)
                 .parentName(c.getParent() != null ? c.getParent().getName() : null)
+                .categoryMainId(c.getCategoryMain() != null ? c.getCategoryMain().getId() : null)
+                .categoryMainName(c.getCategoryMain() != null ? c.getCategoryMain().getName() : null)
                 .productCount(c.getProducts() != null ? c.getProducts().size() : 0)
                 .build();
     }

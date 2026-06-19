@@ -16,6 +16,8 @@ public class CategoryResponse {
     private Boolean isActive;
     private Long parentId;
     private String parentName;
+    private Long categoryMainId;
+    private String categoryMainName;
     private List<CategoryResponse> children;
     private Integer productCount;
 }

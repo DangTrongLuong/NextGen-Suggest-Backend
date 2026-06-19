@@ -24,6 +24,10 @@ public class Category {
     @JoinColumn(name = "parent_id")
     private Category parent;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_main_id")
+    private CategoryMain categoryMain;
+
     @OneToMany(mappedBy = "parent", fetch = FetchType.LAZY)
     @Builder.Default
     private List<Category> children = new ArrayList<>();

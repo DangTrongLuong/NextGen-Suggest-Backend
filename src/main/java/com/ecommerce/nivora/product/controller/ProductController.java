@@ -32,6 +32,7 @@ public class ProductController {
     public ResponseEntity<ApiResponse<PageResponse<ProductResponse>>> getAll(
             @RequestParam(required = false) Long categoryId,
             @RequestParam(required = false) String categorySlug,
+            @RequestParam(required = false) String categoryMainSlug,
             @RequestParam(required = false) String brand,
             @RequestParam(required = false) BigDecimal minPrice,
             @RequestParam(required = false) BigDecimal maxPrice,
@@ -47,7 +48,7 @@ public class ProductController {
                 : Sort.by(sortBy).descending();
 
         return ResponseEntity.ok(ApiResponse.success(
-                productService.getAll(categoryId, categorySlug, brand, minPrice, maxPrice, minRating, search,
+                productService.getAll(categoryId, categorySlug, categoryMainSlug, brand, minPrice, maxPrice, minRating, search,
                         PageRequest.of(page, size, sort))));
     }
 

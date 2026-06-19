@@ -31,6 +31,10 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 
 @Service
 @RequiredArgsConstructor
@@ -70,7 +74,21 @@ public class SearchServiceImpl implements SearchService {
 
             log.info("Forwarding search query '{}' (rerank={}, topK={}) to FastAPI: {}", query, rerank, safeTopK, targetUri);
 
-            FastApiSearchResponse apiResponse = restTemplate.getForObject(targetUri, FastApiSearchResponse.class);
+            HttpHeaders headers = new HttpHeaders();
+            try {
+                ServletRequestAttributes attr = (ServletRequestAttributes) RequestContextHolder.currentRequestAttributes();
+                if (attr != null && attr.getRequest() != null) {
+                    String sessionIdHeader = attr.getRequest().getHeader("X-Session-Id");
+                    if (sessionIdHeader != null) {
+                        headers.set("X-Session-Id", sessionIdHeader);
+                    }
+                }
+            } catch (Exception e) {
+                // Ignore context failures (e.g. background threads)
+            }
+            HttpEntity<Void> requestEntity = new HttpEntity<>(headers);
+            ResponseEntity<FastApiSearchResponse> responseEntity = restTemplate.exchange(targetUri, HttpMethod.GET, requestEntity, FastApiSearchResponse.class);
+            FastApiSearchResponse apiResponse = responseEntity.getBody();
 
             if (apiResponse == null || apiResponse.getResults() == null || apiResponse.getResults().isEmpty()) {
                 log.info("No semantic search results returned from FastAPI for query: {}", query);
@@ -131,7 +149,21 @@ public class SearchServiceImpl implements SearchService {
 
             log.info("Forwarding paginated search query '{}' (rerank={}, page={}, size={}) to FastAPI: {}", query, rerank, page, size, targetUri);
 
-            FastApiSearchResponse apiResponse = restTemplate.getForObject(targetUri, FastApiSearchResponse.class);
+            HttpHeaders headers = new HttpHeaders();
+            try {
+                ServletRequestAttributes attr = (ServletRequestAttributes) RequestContextHolder.currentRequestAttributes();
+                if (attr != null && attr.getRequest() != null) {
+                    String sessionIdHeader = attr.getRequest().getHeader("X-Session-Id");
+                    if (sessionIdHeader != null) {
+                        headers.set("X-Session-Id", sessionIdHeader);
+                    }
+                }
+            } catch (Exception e) {
+                // Ignore context failures
+            }
+            HttpEntity<Void> requestEntity = new HttpEntity<>(headers);
+            ResponseEntity<FastApiSearchResponse> responseEntity = restTemplate.exchange(targetUri, HttpMethod.GET, requestEntity, FastApiSearchResponse.class);
+            FastApiSearchResponse apiResponse = responseEntity.getBody();
 
             if (apiResponse == null || apiResponse.getResults() == null || apiResponse.getResults().isEmpty()) {
                 log.info("No semantic search results returned from FastAPI for paginated query: {}", query);

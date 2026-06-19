@@ -3,7 +3,9 @@ package com.ecommerce.nivora.product.service;
 import com.ecommerce.nivora.cart.repository.CartItemRepository;
 import com.ecommerce.nivora.category.dto.response.CategoryResponse;
 import com.ecommerce.nivora.category.entity.Category;
+import com.ecommerce.nivora.category.entity.CategoryMain;
 import com.ecommerce.nivora.category.repository.CategoryRepository;
+import com.ecommerce.nivora.category.repository.CategoryMainRepository;
 import com.ecommerce.nivora.common.dto.response.PageResponse;
 import com.ecommerce.nivora.common.utils.SlugUtils;
 import com.ecommerce.nivora.exception.ConflictException;
@@ -51,6 +53,7 @@ public class ProductServiceImpl implements ProductService {
     private final jakarta.servlet.http.HttpServletRequest httpServletRequest;
     private final Map<String, Long> viewCooldownCache = new java.util.concurrent.ConcurrentHashMap<>();
     private final CategoryRepository categoryRepository;
+    private final CategoryMainRepository categoryMainRepository;
     private final ProductVariantRepository variantRepository;
     private final ProductImageRepository imageRepository;
     private final InventoryRepository inventoryRepository;
@@ -63,12 +66,22 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<ProductResponse> getAll(Long categoryId, String categorySlug, String brand, BigDecimal minPrice,
+    public PageResponse<ProductResponse> getAll(Long categoryId, String categorySlug, String categoryMainSlug, String brand, BigDecimal minPrice,
             BigDecimal maxPrice, BigDecimal minRating,
             String search, Pageable pageable) {
         List<Long> categoryIds = null;
         if (categorySlug != null && !categorySlug.trim().isEmpty() && !"All".equalsIgnoreCase(categorySlug)) {
             categoryIds = getCategoryAndDescendantIds(categorySlug);
+        } else if (categoryMainSlug != null && !categoryMainSlug.trim().isEmpty()) {
+            CategoryMain main = categoryMainRepository.findBySlugAndDeletedAtIsNull(categoryMainSlug)
+                    .orElseThrow(() -> new ResourceNotFoundException("CategoryMain not found: " + categoryMainSlug));
+            List<Category> cats = categoryRepository.findByDeletedAtIsNullOrderByDisplayOrderAsc().stream()
+                    .filter(c -> c.getCategoryMain() != null && c.getCategoryMain().getId().equals(main.getId()))
+                    .collect(Collectors.toList());
+            categoryIds = new ArrayList<>();
+            for (Category c : cats) {
+                collectDescendantIds(c, categoryIds);
+            }
         } else if (categoryId != null) {
             Category category = categoryRepository.findById(categoryId)
                     .orElseThrow(() -> new ResourceNotFoundException("Category", categoryId));
