@@ -140,6 +140,7 @@ public class ImportServiceImpl implements ImportService {
 
             int processedInLoop = 0;
             for (Map<String, Object> row : rows) {
+                row.put("jobId", jobId);
                 processedInLoop++;
                 boolean isLastRow = (processedInLoop == rows.size());
                 int rowNum = (Integer) row.getOrDefault("rowIndex", 0);
@@ -264,6 +265,7 @@ public class ImportServiceImpl implements ImportService {
             List<Map<String, Object>> errorDetails = new ArrayList<>();
 
             for (Map<String, Object> row : rows) {
+                row.put("jobId", jobId);
                 int rowNum = (Integer) row.getOrDefault("rowIndex", 0);
                 String name = (String) row.get("name");
                 if (name == null) {

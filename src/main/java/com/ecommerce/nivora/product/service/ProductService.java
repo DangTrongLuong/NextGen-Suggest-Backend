@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 public interface ProductService {
-    PageResponse<ProductResponse> getAll(Long categoryId, String categorySlug, String brand, BigDecimal minPrice,
+    PageResponse<ProductResponse> getAll(Long categoryId, String categorySlug, String categoryMainSlug, String brand, BigDecimal minPrice,
                                          BigDecimal maxPrice, BigDecimal minRating,
                                          String search, Pageable pageable);
     PageResponse<ProductResponse> getAllForAdmin(Long categoryId, String search, Pageable pageable);

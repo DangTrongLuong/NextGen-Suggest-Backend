@@ -3,11 +3,14 @@ package com.ecommerce.nivora.admin.service;
 import com.ecommerce.nivora.admin.entity.ImportJob;
 import com.ecommerce.nivora.category.dto.request.CategoryRequest;
 import com.ecommerce.nivora.category.entity.Category;
+import com.ecommerce.nivora.category.entity.CategoryMain;
 import com.ecommerce.nivora.category.repository.CategoryRepository;
+import com.ecommerce.nivora.category.repository.CategoryMainRepository;
 import com.ecommerce.nivora.category.service.CategoryService;
 import com.ecommerce.nivora.common.entity.ImportReferenceMapping;
 import com.ecommerce.nivora.common.repository.ImportReferenceMappingRepository;
 import com.ecommerce.nivora.product.dto.request.ProductRequest;
+import com.ecommerce.nivora.common.utils.SlugUtils;
 import com.ecommerce.nivora.product.entity.Product;
 import com.ecommerce.nivora.product.repository.ProductRepository;
 import com.ecommerce.nivora.product.service.ProductService;
@@ -28,9 +31,11 @@ public class ImportMySQLServiceImpl implements ImportMySQLService {
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
+    private final CategoryMainRepository categoryMainRepository;
     private final ImportReferenceMappingRepository mappingRepository;
     private final ProductService productService;
     private final CategoryService categoryService;
+    private final SlugUtils slugUtils;
 
     @Override
     @Transactional(readOnly = true)
@@ -43,7 +48,7 @@ public class ImportMySQLServiceImpl implements ImportMySQLService {
 
         // Priority 1: external_source_id mapping
         if (externalId != null && !externalId.isBlank() && !"null".equals(externalId)) {
-            boolean mappingExists = mappingRepository.findByEntityTypeAndSourceSystemAndSourceId("PRODUCT", "Excel", externalId).isPresent();
+            boolean mappingExists = mappingRepository.findByEntityTypeAndSourceSystemAndSourceId("PRODUCT", getSourceSystem(row), externalId).isPresent();
             if (mappingExists) return true;
         }
         // Priority 2: SKU
@@ -74,7 +79,7 @@ public class ImportMySQLServiceImpl implements ImportMySQLService {
 
         // Case A: external_source_id mapping exists
         if (externalId != null && !externalId.isBlank() && !"null".equals(externalId)) {
-            boolean mappingExists = mappingRepository.findByEntityTypeAndSourceSystemAndSourceId("CATEGORY", "Excel", externalId).isPresent();
+            boolean mappingExists = mappingRepository.findByEntityTypeAndSourceSystemAndSourceId("CATEGORY", getSourceSystem(row), externalId).isPresent();
             if (mappingExists) return true;
         }
         // Case B: slug exists
@@ -142,8 +147,12 @@ public class ImportMySQLServiceImpl implements ImportMySQLService {
                     .map(Category::getId).orElse(null);
         }
         if (categoryId == null && cExternalId != null && !cExternalId.isBlank() && !"null".equals(cExternalId)) {
-            categoryId = mappingRepository.findByEntityTypeAndSourceSystemAndSourceId("CATEGORY", "Excel", cExternalId)
-                    .map(ImportReferenceMapping::getDbId).orElse(null);
+            categoryId = mappingRepository.findByEntityTypeAndSourceSystemAndSourceId("CATEGORY", getSourceSystem(row), cExternalId)
+                    .map(ImportReferenceMapping::getDbId)
+                    .orElseGet(() -> {
+                        List<ImportReferenceMapping> mappings = mappingRepository.findByEntityTypeAndSourceIdOrderByIdDesc("CATEGORY", cExternalId);
+                        return mappings.isEmpty() ? null : mappings.get(0).getDbId();
+                    });
         }
 
         if (categoryId == null) {
@@ -182,14 +191,17 @@ public class ImportMySQLServiceImpl implements ImportMySQLService {
             sku = "PRODUCT-" + System.nanoTime();
         }
 
+        String rawColor = cleanColorOrSize(getString(row, "color"));
+        String rawSize = cleanColorOrSize(getString(row, "size"));
+
         // Create variants payload (Single variant matching standard manual DTO)
         ProductRequest.VariantRequest variantRequest = ProductRequest.VariantRequest.builder()
                 .sku(sku)
                 .name(name)
                 .price(basePrice)
                 .comparePrice(comparePrice)
-                .color(getString(row, "color"))
-                .size(getString(row, "size"))
+                .color(rawColor)
+                .size(rawSize)
                 .stock(stock)
                 .isActive(true)
                 .imageUrl(imageUrl)
@@ -206,8 +218,8 @@ public class ImportMySQLServiceImpl implements ImportMySQLService {
                 .stock(stock)
                 .imageUrl(imageUrl)
                 .imageUrls(imageUrlsList)
-                .color(getString(row, "color"))
-                .size(getString(row, "size"))
+                .color(rawColor)
+                .size(rawSize)
                 .sku(sku)
                 .variants(List.of(variantRequest))
                 .isActive(true)
@@ -220,10 +232,10 @@ public class ImportMySQLServiceImpl implements ImportMySQLService {
 
         // Save mapping
         if (externalId != null && !externalId.isBlank() && !"null".equals(externalId)) {
-            ImportReferenceMapping mapping = mappingRepository.findByEntityTypeAndSourceSystemAndSourceId("PRODUCT", "Excel", externalId)
+            ImportReferenceMapping mapping = mappingRepository.findByEntityTypeAndSourceSystemAndSourceId("PRODUCT", getSourceSystem(row), externalId)
                     .orElseGet(() -> ImportReferenceMapping.builder()
                             .entityType("PRODUCT")
-                            .sourceSystem("Excel")
+                            .sourceSystem(getSourceSystem(row))
                             .sourceId(externalId)
                             .build());
             mapping.setDbId(response.getId());
@@ -257,8 +269,28 @@ public class ImportMySQLServiceImpl implements ImportMySQLService {
                     .map(Category::getId).orElse(null);
         }
         if (parentId == null && pExternalId != null && !pExternalId.isBlank() && !"null".equals(pExternalId)) {
-            parentId = mappingRepository.findByEntityTypeAndSourceSystemAndSourceId("CATEGORY", "Excel", pExternalId)
-                    .map(ImportReferenceMapping::getDbId).orElse(null);
+            parentId = mappingRepository.findByEntityTypeAndSourceSystemAndSourceId("CATEGORY", getSourceSystem(row), pExternalId)
+                    .map(ImportReferenceMapping::getDbId)
+                    .orElseGet(() -> {
+                        List<ImportReferenceMapping> mappings = mappingRepository.findByEntityTypeAndSourceIdOrderByIdDesc("CATEGORY", pExternalId);
+                        return mappings.isEmpty() ? null : mappings.get(0).getDbId();
+                    });
+        }
+
+        // CategoryMain resolution
+        Long categoryMainId = null;
+        String mainName = getString(row, "category_main", "categoryMain");
+        if (mainName != null && !mainName.trim().isEmpty()) {
+            CategoryMain categoryMain = categoryMainRepository.findByNameAndDeletedAtIsNull(mainName.trim())
+                    .orElseGet(() -> {
+                        String newSlug = slugUtils.uniqueSlug(mainName.trim(), categoryMainRepository::existsBySlug);
+                        CategoryMain newCM = CategoryMain.builder()
+                                .name(mainName.trim())
+                                .slug(newSlug)
+                                .build();
+                        return categoryMainRepository.save(newCM);
+                    });
+            categoryMainId = categoryMain.getId();
         }
 
         // Convert display order
@@ -278,6 +310,7 @@ public class ImportMySQLServiceImpl implements ImportMySQLService {
                 .description(description)
                 .imageUrl(imageUrl)
                 .parentId(parentId)
+                .categoryMainId(categoryMainId)
                 .sortOrder(displayOrder)
                 .isActive(true)
                 .build();
@@ -289,10 +322,10 @@ public class ImportMySQLServiceImpl implements ImportMySQLService {
 
         // Save mapping
         if (externalId != null && !externalId.isBlank() && !"null".equals(externalId)) {
-            ImportReferenceMapping mapping = mappingRepository.findByEntityTypeAndSourceSystemAndSourceId("CATEGORY", "Excel", externalId)
+            ImportReferenceMapping mapping = mappingRepository.findByEntityTypeAndSourceSystemAndSourceId("CATEGORY", getSourceSystem(row), externalId)
                     .orElseGet(() -> ImportReferenceMapping.builder()
                             .entityType("CATEGORY")
-                            .sourceSystem("Excel")
+                            .sourceSystem(getSourceSystem(row))
                             .sourceId(externalId)
                             .build());
             mapping.setDbId(response.getId());
@@ -309,17 +342,16 @@ public class ImportMySQLServiceImpl implements ImportMySQLService {
             log.info("Rolling back product in MySQL due to indexing failure. UUID: {}", uuid);
             
             // Delete reference mappings if any
-            mappingRepository.findByEntityTypeAndSourceSystemAndSourceId("PRODUCT", "Excel", product.getUuid())
-                    .ifPresent(mappingRepository::delete);
-            
-            // Also need to check and remove by db_id
-            mappingRepository.findAll().stream()
-                    .filter(m -> "PRODUCT".equals(m.getEntityType()) && product.getId().equals(m.getDbId()))
-                    .forEach(mappingRepository::delete);
+            mappingRepository.deleteByEntityTypeAndDbId("PRODUCT", product.getId());
 
             productRepository.delete(product);
             log.info("Successfully deleted product from MySQL. UUID: {}", uuid);
         });
+    }
+
+    private String getSourceSystem(Map<String, Object> row) {
+        Object jobId = row.get("jobId");
+        return jobId != null ? "Excel-Job-" + jobId : "Excel";
     }
 
     // ── Helper parsing methods ──────────────────────────────────────────
@@ -367,5 +399,43 @@ public class ImportMySQLServiceImpl implements ImportMySQLService {
             }
         }
         return list;
+    }
+
+    private String cleanColorOrSize(String val) {
+        if (val == null || val.isBlank()) {
+            return null;
+        }
+        String cleaned = val.trim();
+        // Remove outer brackets if present
+        if (cleaned.startsWith("[") && cleaned.endsWith("]")) {
+            cleaned = cleaned.substring(1, cleaned.length() - 1);
+        }
+        // Remove quotes
+        cleaned = cleaned.replace("\"", "").replace("'", "");
+        
+        // Split by comma, trim each element, and rejoin with comma
+        String[] parts = cleaned.split(",");
+        StringBuilder sb = new StringBuilder();
+        for (String part : parts) {
+            String trimmed = part.trim();
+            if (!trimmed.isEmpty()) {
+                if (sb.length() > 0) {
+                    sb.append(",");
+                }
+                sb.append(trimmed);
+            }
+        }
+        cleaned = sb.toString();
+
+        // Truncate to maximum 50 characters to prevent database truncation errors
+        if (cleaned.length() > 50) {
+            int lastComma = cleaned.lastIndexOf(',', 47);
+            if (lastComma > 0) {
+                cleaned = cleaned.substring(0, lastComma);
+            } else {
+                cleaned = cleaned.substring(0, 47) + "...";
+            }
+        }
+        return cleaned;
     }
 }

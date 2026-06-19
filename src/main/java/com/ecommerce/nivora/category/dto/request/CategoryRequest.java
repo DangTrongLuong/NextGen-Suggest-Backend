@@ -18,6 +18,7 @@ public class CategoryRequest {
     private String imageUrl;
     private String icon;
     private Long parentId;
+    private Long categoryMainId;
 
     @Builder.Default
     private Integer sortOrder = 0;
