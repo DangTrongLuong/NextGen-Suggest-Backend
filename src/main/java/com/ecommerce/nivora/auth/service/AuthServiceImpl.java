@@ -35,6 +35,19 @@ import java.util.stream.Collectors;
 @Slf4j
 public class AuthServiceImpl implements AuthService {
 
+    /**
+     * ThreadLocal SHA-256 digest: MessageDigest is NOT thread-safe, but ThreadLocal
+     * gives each request thread its own instance, avoiding both synchronization overhead
+     * and the cost of MessageDigest.getInstance() on every login/refresh/logout call.
+     */
+    private static final ThreadLocal<MessageDigest> SHA256 = ThreadLocal.withInitial(() -> {
+        try {
+            return MessageDigest.getInstance("SHA-256");
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new RuntimeException("SHA-256 not available", e);
+        }
+    });
+
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final RefreshTokenRepository refreshTokenRepository;
@@ -164,12 +177,9 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private String hashToken(String token) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(token.getBytes(StandardCharsets.UTF_8));
-            return Base64.getEncoder().encodeToString(hash);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to hash token", e);
-        }
+        MessageDigest digest = SHA256.get();
+        digest.reset(); // must reset before reuse
+        byte[] hash = digest.digest(token.getBytes(StandardCharsets.UTF_8));
+        return Base64.getEncoder().encodeToString(hash);
     }
 }

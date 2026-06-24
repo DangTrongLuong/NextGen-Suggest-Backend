@@ -39,7 +39,9 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -51,7 +53,14 @@ public class ProductServiceImpl implements ProductService {
 
     private final ProductRepository productRepository;
     private final jakarta.servlet.http.HttpServletRequest httpServletRequest;
-    private final Map<String, Long> viewCooldownCache = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<String, Long> viewCooldownCache = Collections.synchronizedMap(
+        new LinkedHashMap<String, Long>(1000, 0.75f, true) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<String, Long> eldest) {
+                return size() > 10000;
+            }
+        }
+    );
     private final CategoryRepository categoryRepository;
     private final CategoryMainRepository categoryMainRepository;
     private final ProductVariantRepository variantRepository;
@@ -90,9 +99,10 @@ public class ProductServiceImpl implements ProductService {
         }
 
         boolean applyCategoryFilter = categoryIds != null && !categoryIds.isEmpty();
+        String sanitizedSearch = sanitizeSearchQuery(search);
 
         Page<Product> page = productRepository.findWithFilters(
-                applyCategoryFilter, categoryIds, brand, minPrice, maxPrice, minRating, search, pageable);
+                applyCategoryFilter, categoryIds, brand, minPrice, maxPrice, minRating, sanitizedSearch, pageable);
         return PageResponse.of(page.map(this::toResponse));
     }
 
@@ -118,8 +128,22 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<ProductResponse> getAllForAdmin(Long categoryId, String search, Pageable pageable) {
-        Page<Product> page = productRepository.findAllForAdmin(categoryId, search, pageable);
+        String sanitizedSearch = sanitizeSearchQuery(search);
+        Page<Product> page = productRepository.findAllForAdmin(categoryId, sanitizedSearch, pageable);
         return PageResponse.of(page.map(this::toResponse));
+    }
+
+    private String sanitizeSearchQuery(String search) {
+        if (search == null || search.trim().isEmpty()) {
+            return null;
+        }
+        String normalized = search.trim().replaceAll("\\s+", " ");
+        if (normalized.length() > 100) {
+            normalized = normalized.substring(0, 100);
+        }
+        return normalized.replace("\\", "\\\\")
+                         .replace("%", "\\%")
+                         .replace("_", "\\_");
     }
 
     private void incrementProductView(Product product) {
@@ -133,10 +157,10 @@ public class ProductServiceImpl implements ProductService {
         
         String cacheKey = sessionId + ":" + product.getId();
         long now = System.currentTimeMillis();
-        Long lastViewTime = viewCooldownCache.putIfAbsent(cacheKey, now);
         
-        if (lastViewTime != null) {
-            if ((now - lastViewTime) <= 60000) {
+        synchronized (viewCooldownCache) {
+            Long lastViewTime = viewCooldownCache.get(cacheKey);
+            if (lastViewTime != null && (now - lastViewTime) <= 60000) {
                 return;
             }
             viewCooldownCache.put(cacheKey, now);
@@ -144,10 +168,6 @@ public class ProductServiceImpl implements ProductService {
         
         product.setViews(product.getViews() == null ? 1 : product.getViews() + 1);
         productRepository.save(product);
-        
-        if (java.util.concurrent.ThreadLocalRandom.current().nextInt(100) == 0) {
-            viewCooldownCache.entrySet().removeIf(entry -> (now - entry.getValue()) > 60000);
-        }
     }
 
     @Override

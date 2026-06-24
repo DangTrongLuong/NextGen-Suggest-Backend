@@ -27,6 +27,7 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 @Service
@@ -53,16 +54,25 @@ public class RecommendationServiceImpl implements RecommendationService {
         log.info("Generating homepage recommendations for user={}, session={}, guestViewedCount={}", 
                 userId, sessionId, guestViewedIds != null ? guestViewedIds.size() : 0);
 
-        // 1. Lấy Featured, BestSellers, NewArrivals có sẵn từ DB (đã được cache hoặc tối ưu)
-        List<ProductResponse> featured = productService.getFeatured();
-        List<ProductResponse> bestSellers = productService.getBestSellers();
-        List<ProductResponse> newArrivals = productService.getNewArrivals();
+        // 1–4. Run static sections in parallel to reduce homepage latency
+        CompletableFuture<List<ProductResponse>> featuredFuture =
+                CompletableFuture.supplyAsync(productService::getFeatured);
+        CompletableFuture<List<ProductResponse>> bestSellersFuture =
+                CompletableFuture.supplyAsync(productService::getBestSellers);
+        CompletableFuture<List<ProductResponse>> newArrivalsFuture =
+                CompletableFuture.supplyAsync(productService::getNewArrivals);
+        CompletableFuture<List<ProductResponse>> trendingFuture =
+                CompletableFuture.supplyAsync(() -> {
+                    List<ProductResponse> t = getTrendingFromCache("trending_today");
+                    return t.isEmpty() ? productService.getTrendingFallback(8) : t;
+                });
 
-        // 2. Lấy danh sách Trending Today từ Cache
-        List<ProductResponse> trending = getTrendingFromCache("trending_today");
-        if (trending.isEmpty()) {
-            trending = productService.getTrendingFallback(8); // Fallback to actual highest view/activity products
-        }
+        CompletableFuture.allOf(featuredFuture, bestSellersFuture, newArrivalsFuture, trendingFuture).join();
+
+        List<ProductResponse> featured = featuredFuture.join();
+        List<ProductResponse> bestSellers = bestSellersFuture.join();
+        List<ProductResponse> newArrivals = newArrivalsFuture.join();
+        List<ProductResponse> trending = trendingFuture.join();
 
         // 3. Lấy Tiếp tục xem (Recent Viewed)
         List<ProductResponse> recent = getRecentViewed(sessionId, userId, guestViewedIds);
@@ -372,31 +382,31 @@ public class RecommendationServiceImpl implements RecommendationService {
                 });
             }
             
-            List<Long> orderedPids = new ArrayList<>();
+            // Use LinkedHashSet for O(1) dedup while preserving insertion order
+            LinkedHashSet<Long> seenPids = new LinkedHashSet<>();
             Map<Long, String> pidToReason = new HashMap<>();
-            
+
             for (Long pid : wardPids) {
-                if (!orderedPids.contains(pid)) {
-                    orderedPids.add(pid);
+                if (seenPids.add(pid)) {
                     pidToReason.put(pid, "🔥 Bán chạy tại " + ward);
                 }
             }
-            
+
             for (Long pid : districtPids) {
-                if (orderedPids.size() >= limit) break;
-                if (!orderedPids.contains(pid)) {
-                    orderedPids.add(pid);
+                if (seenPids.size() >= limit) break;
+                if (seenPids.add(pid)) {
                     pidToReason.put(pid, "🔥 Bán chạy tại " + district);
                 }
             }
-            
+
             for (Long pid : provincePids) {
-                if (orderedPids.size() >= limit) break;
-                if (!orderedPids.contains(pid)) {
-                    orderedPids.add(pid);
+                if (seenPids.size() >= limit) break;
+                if (seenPids.add(pid)) {
                     pidToReason.put(pid, "🔥 Bán chạy tại " + province);
                 }
             }
+
+            List<Long> orderedPids = new ArrayList<>(seenPids);
             
             if (!orderedPids.isEmpty()) {
                 List<ProductResponse> hydrated = productService.getProductsByIds(orderedPids);
@@ -420,9 +430,12 @@ public class RecommendationServiceImpl implements RecommendationService {
                 nationwide = productService.getTrendingFallback(limit);
             }
             
+            Set<Long> resultIds = resultList.stream()
+                    .map(ProductResponse::getId)
+                    .collect(Collectors.toSet());
             for (ProductResponse p : nationwide) {
                 if (resultList.size() >= limit) break;
-                if (resultList.stream().noneMatch(existing -> existing.getId().equals(p.getId()))) {
+                if (resultIds.add(p.getId())) {
                     p.setRecommendationReason("🔥 Sản phẩm nổi bật toàn quốc");
                     p.setRecommendationScore(0.85);
                     resultList.add(p);

@@ -4,9 +4,7 @@ import com.ecommerce.nivora.common.dto.response.ApiResponse;
 import com.ecommerce.nivora.common.dto.response.PageResponse;
 import com.ecommerce.nivora.product.dto.response.ProductResponse;
 import com.ecommerce.nivora.product.dto.response.ProductVariantResponse;
-import com.ecommerce.nivora.product.entity.Product;
 import com.ecommerce.nivora.product.service.ProductService;
-
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -18,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Set;
 
 @RestController
 @RequestMapping({"/api/v1/products", "/api/products"})
@@ -26,6 +25,16 @@ import java.util.List;
 public class ProductController {
 
     private final ProductService productService;
+
+    /**
+     * Whitelist of JPA entity field names allowed in ORDER BY clauses.
+     * Any value not in this set is silently replaced with the default (createdAt)
+     * to prevent SQL injection through dynamic sorting.
+     */
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
+            "id", "name", "price", "originalPrice", "discountPercent",
+            "createdAt", "updatedAt", "averageRating", "reviewCount", "sold"
+    );
 
     @GetMapping
     @Operation(summary = "Get all products with filters and pagination")
@@ -43,13 +52,22 @@ public class ProductController {
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir) {
 
-        Sort sort = sortDir.equalsIgnoreCase("asc")
-                ? Sort.by(sortBy).ascending()
-                : Sort.by(sortBy).descending();
+        // --- Security: whitelist sort field to prevent ORDER BY injection ---
+        String safeSort = ALLOWED_SORT_FIELDS.contains(sortBy) ? sortBy : "createdAt";
+        Sort.Direction dir = "asc".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        Sort sort = Sort.by(dir, safeSort);
+
+        // --- Bound pagination to prevent resource exhaustion ---
+        int validPage = Math.max(0, page);
+        int validSize = Math.min(Math.max(1, size), 100);
+
+        // --- Cap search keyword length ---
+        String validSearch = (search != null && search.length() > 200) ? search.substring(0, 200) : search;
 
         return ResponseEntity.ok(ApiResponse.success(
-                productService.getAll(categoryId, categorySlug, categoryMainSlug, brand, minPrice, maxPrice, minRating, search,
-                        PageRequest.of(page, size, sort))));
+                productService.getAll(categoryId, categorySlug, categoryMainSlug, brand,
+                        minPrice, maxPrice, minRating, validSearch,
+                        PageRequest.of(validPage, validSize, sort))));
     }
 
     @GetMapping("/{id:\\d+}")

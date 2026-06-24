@@ -60,21 +60,24 @@ public class ChatServiceImpl implements ChatService {
                 // Khách vãng lai
             }
 
-            // 2. Lấy Session ID
+            // 2. Lấy Session ID — dùng getSession(false) để tránh tạo session mới không cần thiết
             String sessionId = "anonymous-session";
             try {
-                org.springframework.web.context.request.ServletRequestAttributes attr = 
+                org.springframework.web.context.request.ServletRequestAttributes attr =
                     (org.springframework.web.context.request.ServletRequestAttributes) org.springframework.web.context.request.RequestContextHolder.currentRequestAttributes();
                 if (attr != null && attr.getRequest() != null) {
-                    var session = attr.getRequest().getSession(false);
-                    if (session != null) {
-                        sessionId = session.getId();
+                    jakarta.servlet.http.HttpServletRequest req = attr.getRequest();
+                    // Ưu tiên: header custom > session đã tồn tại > IP
+                    String xSessionId = req.getHeader("X-Session-Id");
+                    if (xSessionId != null && !xSessionId.isBlank()) {
+                        sessionId = xSessionId;
                     } else {
-                        sessionId = attr.getRequest().getSession(true).getId();
+                        jakarta.servlet.http.HttpSession existing = req.getSession(false);
+                        sessionId = (existing != null) ? existing.getId() : req.getRemoteAddr();
                     }
                 }
             } catch (Exception e) {
-                // Bỏ qua
+                // Bỏ qua — context không có sẵn (e.g. background thread)
             }
 
             // 3. Chuẩn bị Request Payload gửi sang FastAPI
