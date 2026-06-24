@@ -251,13 +251,18 @@ public class SearchServiceImpl implements SearchService {
 
     private void logSearch(String query, int resultsCount, int latencyMs) {
         try {
-            String sessionId = "system-session-unknown";
+            String sessionId = "anonymous";
             try {
                 ServletRequestAttributes attr = (ServletRequestAttributes) RequestContextHolder.currentRequestAttributes();
-                if (attr != null && attr.getRequest() != null && attr.getRequest().getSession(false) != null) {
-                    sessionId = attr.getRequest().getSession(false).getId();
-                } else if (attr != null && attr.getRequest() != null) {
-                    sessionId = attr.getRequest().getSession(true).getId();
+                if (attr != null && attr.getRequest() != null) {
+                    sessionId = attr.getRequest().getHeader("X-Session-Id");
+                    if (sessionId == null || sessionId.isBlank()) {
+                        if (attr.getRequest().getSession(false) != null) {
+                            sessionId = attr.getRequest().getSession(false).getId();
+                        } else {
+                            sessionId = attr.getRequest().getRemoteAddr();
+                        }
+                    }
                 }
             } catch (Exception e) {
                 // Context attributes not available (e.g. background task)
@@ -270,9 +275,9 @@ public class SearchServiceImpl implements SearchService {
             }
 
             SearchLog searchLog = SearchLog.builder()
-                    .sessionId(sessionId)
+                    .sessionId(sessionId != null && sessionId.length() > 255 ? sessionId.substring(0, 255) : sessionId)
                     .user(user)
-                    .queryText(query)
+                    .queryText(query != null && query.length() > 500 ? query.substring(0, 500) : query)
                     .resultsCount(resultsCount)
                     .latencyMs(latencyMs)
                     .build();

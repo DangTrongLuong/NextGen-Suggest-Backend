@@ -36,7 +36,6 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 @Service
@@ -50,8 +49,6 @@ public class OrderServiceImpl implements OrderService {
     private final InventoryRepository inventoryRepository;
     private final CartService cartService;
     private final com.ecommerce.nivora.product.repository.ProductRepository productRepository;
-
-    private static final AtomicInteger SEQ = new AtomicInteger(1);
 
     @Override
     @Transactional
@@ -159,12 +156,14 @@ public class OrderServiceImpl implements OrderService {
 
         orderRepository.save(order);
 
-        // Reserve inventory
+        // Reserve inventory — batch update to avoid N individual saves
+        List<Inventory> inventoriesToReserve = new ArrayList<>();
         for (CartItem cartItem : cart.getItems()) {
             Inventory inv = inventoryRepository.findByVariantId(cartItem.getVariant().getId()).get();
             inv.setReservedQuantity(inv.getReservedQuantity() + cartItem.getQuantity());
-            inventoryRepository.save(inv);
+            inventoriesToReserve.add(inv);
         }
+        inventoryRepository.saveAll(inventoriesToReserve);
 
         // Clear cart
         cartService.clearCart(userId);
@@ -213,19 +212,22 @@ public class OrderServiceImpl implements OrderService {
             case SHIPPING -> order.setShippedAt(LocalDateTime.now());
             case DELIVERED -> {
                 order.setDeliveredAt(LocalDateTime.now());
-                // Deduct inventory on delivery & increment sales count
+                // Deduct inventory & update sales — batch saves to avoid N×2 individual ops
+                List<Inventory> inventoriesToUpdate = new ArrayList<>();
+                List<Product> productsToUpdate = new ArrayList<>();
                 order.getItems().forEach(item -> {
                     inventoryRepository.findByVariantId(item.getVariant().getId()).ifPresent(inv -> {
                         inv.setQuantity(inv.getQuantity() - item.getQuantity());
                         inv.setReservedQuantity(Math.max(0, inv.getReservedQuantity() - item.getQuantity()));
-                        inventoryRepository.save(inv);
+                        inventoriesToUpdate.add(inv);
                     });
-
                     productRepository.findById(item.getProduct().getId()).ifPresent(p -> {
                         p.setSalesCount((p.getSalesCount() == null ? 0L : p.getSalesCount()) + item.getQuantity());
-                        productRepository.save(p);
+                        productsToUpdate.add(p);
                     });
                 });
+                inventoryRepository.saveAll(inventoriesToUpdate);
+                productRepository.saveAll(productsToUpdate);
                 // Mark payment completed
                 if (order.getPayment() != null) {
                     order.getPayment().setStatus(Payment.Status.COMPLETED);
@@ -298,9 +300,17 @@ public class OrderServiceImpl implements OrderService {
 
     // ── Helpers ──────────────────────────────────────────
 
+    /**
+     * Generates a unique order number in the format ORD-YYYYMMDD-NNNN.
+     * Queries the DB for today's order count so that the sequence is correct
+     * after a server restart (fixes the AtomicInteger reset collision bug).
+     * Called within a @Transactional context so the count is consistent.
+     */
     private String generateOrderNumber() {
         String date = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-        return "ORD-" + date + "-" + String.format("%04d", SEQ.getAndIncrement());
+        String prefix = "ORD-" + date + "-";
+        long todayCount = orderRepository.countByOrderNumberStartingWith(prefix);
+        return prefix + String.format("%04d", todayCount + 1);
     }
 
     private OrderResponse toResponse(Order o) {
