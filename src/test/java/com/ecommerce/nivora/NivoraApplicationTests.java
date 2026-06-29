@@ -7,7 +7,6 @@ import com.ecommerce.nivora.product.entity.Product;
 import com.ecommerce.nivora.product.entity.ProductVariant;
 import com.ecommerce.nivora.product.repository.ProductRepository;
 
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -123,4 +122,3 @@ class NivoraApplicationTests {
         }
     }
 }
-
