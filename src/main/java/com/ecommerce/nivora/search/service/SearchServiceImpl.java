@@ -115,9 +115,17 @@ public class SearchServiceImpl implements SearchService {
             return results;
 
         } catch (Exception e) {
-            log.error("Failed to perform semantic search via FastAPI", e);
+            log.error("Failed to perform semantic search via FastAPI, falling back to database search", e);
             logSearch(query, 0, (int) (System.currentTimeMillis() - startTime));
-            return Collections.emptyList();
+            try {
+                PageResponse<ProductResponse> dbResult = productService.getAll(
+                        null, null, null, null, null, null, null, query, PageRequest.of(0, safeTopK)
+                );
+                return dbResult.getContent();
+            } catch (Exception ex) {
+                log.error("Database fallback search failed", ex);
+                return Collections.emptyList();
+            }
         }
     }
 
@@ -218,16 +226,23 @@ public class SearchServiceImpl implements SearchService {
                     .build();
 
         } catch (Exception e) {
-            log.error("Failed to perform paginated semantic search via FastAPI", e);
+            log.error("Failed to perform paginated semantic search via FastAPI, falling back to database search", e);
             logSearch(query, 0, (int) (System.currentTimeMillis() - startTime));
-            return PageResponse.<ProductResponse>builder()
-                    .content(Collections.emptyList())
-                    .page(page)
-                    .size(size)
-                    .totalElements(0)
-                    .totalPages(0)
-                    .last(true)
-                    .build();
+            try {
+                return productService.getAll(
+                        null, null, null, null, null, null, null, query, PageRequest.of(page, size)
+                );
+            } catch (Exception ex) {
+                log.error("Database fallback paginated search failed", ex);
+                return PageResponse.<ProductResponse>builder()
+                        .content(Collections.emptyList())
+                        .page(page)
+                        .size(size)
+                        .totalElements(0)
+                        .totalPages(0)
+                        .last(true)
+                        .build();
+            }
         }
     }
 

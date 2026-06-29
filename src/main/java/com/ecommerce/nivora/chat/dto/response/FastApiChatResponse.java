@@ -13,4 +13,9 @@ public class FastApiChatResponse {
     
     @JsonProperty("suggested_products")
     private List<FastApiProductResult> suggestedProducts;
+
+    private String intent;
+
+    @JsonProperty("is_out_of_scope")
+    private Boolean isOutOfScope;
 }

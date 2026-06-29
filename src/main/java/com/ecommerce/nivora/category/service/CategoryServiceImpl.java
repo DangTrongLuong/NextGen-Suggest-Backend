@@ -125,7 +125,8 @@ public class CategoryServiceImpl implements CategoryService {
                 .orElseThrow(() -> new ResourceNotFoundException("Category not found: " + slug));
         List<Category> path = new java.util.ArrayList<>();
         Category current = category;
-        while (current != null) {
+        java.util.Set<Long> visited = new java.util.HashSet<>();
+        while (current != null && visited.add(current.getId())) {
             path.add(0, current);
             current = current.getParent();
         }

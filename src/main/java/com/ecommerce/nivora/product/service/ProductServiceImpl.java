@@ -115,11 +115,18 @@ public class ProductServiceImpl implements ProductService {
     }
 
     private void collectDescendantIds(Category category, List<Long> ids) {
+        collectDescendantIdsHelper(category, ids, new java.util.HashSet<>());
+    }
+
+    private void collectDescendantIdsHelper(Category category, List<Long> ids, java.util.Set<Long> visited) {
+        if (category == null || !visited.add(category.getId())) {
+            return;
+        }
         ids.add(category.getId());
         if (category.getChildren() != null) {
             for (Category child : category.getChildren()) {
                 if (child.getDeletedAt() == null && child.getIsActive()) {
-                    collectDescendantIds(child, ids);
+                    collectDescendantIdsHelper(child, ids, visited);
                 }
             }
         }

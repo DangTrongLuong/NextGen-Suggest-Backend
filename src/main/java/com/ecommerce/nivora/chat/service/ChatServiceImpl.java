@@ -11,6 +11,8 @@ import com.ecommerce.nivora.product.service.ProductService;
 import com.ecommerce.nivora.recommendation.FastApiProductResult;
 import com.ecommerce.nivora.security.utils.SecurityUtils;
 import com.ecommerce.nivora.user.entity.User;
+import com.ecommerce.nivora.chat.entity.ChatLog;
+import com.ecommerce.nivora.chat.repository.ChatLogRepository;
 
 
 import lombok.RequiredArgsConstructor;
@@ -33,6 +35,7 @@ public class ChatServiceImpl implements ChatService {
     private final RestTemplate restTemplate;
     private final ProductService productService;
     private final SecurityUtils securityUtils;
+    private final ChatLogRepository chatLogRepository;
 
     private static final Pattern SLUG_PATTERN = Pattern.compile("[^a-z0-9]+");
 
@@ -124,11 +127,11 @@ public class ChatServiceImpl implements ChatService {
                         .filter(Objects::nonNull)
                         .collect(Collectors.toList());
 
-                Map<String, ProductResponse> dbProductsBySku = productService.getActiveProductsBySkus(skus);
-                log.info("Hydrated {}/{} semantic chatbot suggested products from database", dbProductsBySku.size(), skus.size());
+                Map<String, ProductResponse> dbProductsByUuid = productService.getActiveProductsByUuids(skus);
+                log.info("Hydrated {}/{} semantic chatbot suggested products from database", dbProductsByUuid.size(), skus.size());
 
                 for (FastApiProductResult res : apiResponse.getSuggestedProducts()) {
-                    ProductResponse dbProduct = dbProductsBySku.get(res.getProductId());
+                    ProductResponse dbProduct = dbProductsByUuid.get(res.getProductId());
                     if (dbProduct != null) {
                         // Thiết lập điểm số và lý do gợi ý cho sản phẩm chatbot
                         dbProduct.setRecommendationScore(res.getScore());
@@ -140,16 +143,39 @@ public class ChatServiceImpl implements ChatService {
                 }
             }
 
+            // 4. Lưu log vào Database MySQL
+            try {
+                String userMessage = request.getMessages().get(request.getMessages().size() - 1).getContent();
+                ChatLog chatLog = ChatLog.builder()
+                        .user(currentUser)
+                        .sessionId(sessionId)
+                        .userMessage(userMessage)
+                        .botResponse(apiResponse.getResponse())
+                        .intent(apiResponse.getIntent() != null ? apiResponse.getIntent() : "product_information")
+                        .isOutOfScope(apiResponse.getIsOutOfScope() != null ? apiResponse.getIsOutOfScope() : false)
+                        .build();
+                chatLogRepository.save(chatLog);
+                log.info("Saved chatbot log to database with intent: {}, isOutOfScope: {}", chatLog.getIntent(), chatLog.getIsOutOfScope());
+            } catch (Exception ex) {
+                log.error("Failed to save chatbot log to database", ex);
+            }
+
             return ChatResponse.builder()
                     .response(apiResponse.getResponse())
                     .suggestedProducts(hydratedProducts)
                     .build();
 
         } catch (Exception e) {
-            log.error("Failed to fetch response from chatbot FastAPI", e);
+            log.error("Failed to fetch response from chatbot FastAPI, falling back to featured products", e);
+            List<ProductResponse> fallbackProducts = Collections.emptyList();
+            try {
+                fallbackProducts = productService.getFeatured();
+            } catch (Exception ex) {
+                log.error("Failed to load fallback featured products for chat", ex);
+            }
             return ChatResponse.builder()
-                    .response("Đã xảy ra lỗi khi kết nối với Trợ lý AI: " + e.getMessage())
-                    .suggestedProducts(Collections.emptyList())
+                    .response("Hiện tại hệ thống trợ lý ảo đang bận hoặc đang bảo trì. Bạn có thể tham khảo một số sản phẩm nội thất nổi bật dưới đây của cửa hàng nhé!")
+                    .suggestedProducts(fallbackProducts)
                     .build();
         }
     }
