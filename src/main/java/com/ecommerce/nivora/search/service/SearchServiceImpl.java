@@ -12,6 +12,10 @@ import com.ecommerce.nivora.search.entity.SearchLog;
 import com.ecommerce.nivora.search.repository.SearchLogRepository;
 import com.ecommerce.nivora.user.entity.User;
 import com.ecommerce.nivora.user.repository.UserRepository;
+import com.ecommerce.nivora.category.entity.Category;
+import com.ecommerce.nivora.category.repository.CategoryRepository;
+import com.ecommerce.nivora.category.entity.CategoryMain;
+import com.ecommerce.nivora.category.repository.CategoryMainRepository;
 
 
 import lombok.RequiredArgsConstructor;
@@ -45,6 +49,8 @@ public class SearchServiceImpl implements SearchService {
     private final ProductService productService;
     private final SearchLogRepository searchLogRepository;
     private final UserRepository userRepository;
+    private final CategoryRepository categoryRepository;
+    private final CategoryMainRepository categoryMainRepository;
 
     private static final Pattern SLUG_PATTERN = Pattern.compile("[^a-z0-9]+");
 
@@ -130,7 +136,12 @@ public class SearchServiceImpl implements SearchService {
     }
 
     @Override
-    public PageResponse<ProductResponse> searchPaginated(String query, boolean rerank, int page, int size) {
+    public PageResponse<ProductResponse> searchPaginated(
+            String query, boolean rerank, int page, int size,
+            String categorySlug, String categoryMainSlug,
+            Double minPrice, Double maxPrice, Double minRating,
+            String sortBy, String sortDir
+    ) {
         if (query == null || query.trim().isEmpty()) {
             return PageResponse.<ProductResponse>builder()
                     .content(Collections.emptyList())
@@ -144,18 +155,53 @@ public class SearchServiceImpl implements SearchService {
 
         long startTime = System.currentTimeMillis();
         try {
-            // Only pass page and size — FastAPI handles candidate fetch and reranking internally.
-            java.net.URI targetUri = UriComponentsBuilder.fromHttpUrl(fastApiUrl)
+            // Resolve Category Name if categorySlug is present
+            String categoryName = null;
+            if (categorySlug != null && !categorySlug.trim().isEmpty()) {
+                categoryName = categoryRepository.findBySlugAndDeletedAtIsNull(categorySlug)
+                        .map(Category::getName)
+                        .orElse(null);
+            }
+
+            // Resolve CategoryMain ID if categoryMainSlug is present
+            Long mainId = null;
+            if (categoryMainSlug != null && !categoryMainSlug.trim().isEmpty()) {
+                mainId = categoryMainRepository.findBySlugAndDeletedAtIsNull(categoryMainSlug)
+                        .map(CategoryMain::getId)
+                        .orElse(null);
+            }
+
+            // Determine if we need to post-process filter/sort in Java
+            boolean needsJavaFilterOrSort = (minRating != null)
+                    || (mainId != null)
+                    || (sortBy != null && !sortBy.trim().isEmpty() && !sortBy.equalsIgnoreCase("newest"));
+
+            // If we need post-processing, fetch a larger pool of top candidates from FastAPI
+            int fetchSize = needsJavaFilterOrSort ? 100 : size;
+            int fetchPage = needsJavaFilterOrSort ? 0 : page;
+
+            UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(fastApiUrl)
                     .path("/api/v1/search")
                     .queryParam("q", query)
                     .queryParam("use_reranking", rerank)
-                    .queryParam("page", page)
-                    .queryParam("size", size)
-                    .build()
+                    .queryParam("page", fetchPage)
+                    .queryParam("size", fetchSize);
+
+            if (categoryName != null) {
+                builder.queryParam("category", categoryName);
+            }
+            if (minPrice != null) {
+                builder.queryParam("min_price", minPrice);
+            }
+            if (maxPrice != null) {
+                builder.queryParam("max_price", maxPrice);
+            }
+
+            java.net.URI targetUri = builder.build()
                     .encode(java.nio.charset.StandardCharsets.UTF_8)
                     .toUri();
 
-            log.info("Forwarding paginated search query '{}' (rerank={}, page={}, size={}) to FastAPI: {}", query, rerank, page, size, targetUri);
+            log.info("Forwarding paginated search query '{}' to FastAPI: {}", query, targetUri);
 
             HttpHeaders headers = new HttpHeaders();
             try {
@@ -169,6 +215,7 @@ public class SearchServiceImpl implements SearchService {
             } catch (Exception e) {
                 // Ignore context failures
             }
+            
             HttpEntity<Void> requestEntity = new HttpEntity<>(headers);
             ResponseEntity<FastApiSearchResponse> responseEntity = restTemplate.exchange(targetUri, HttpMethod.GET, requestEntity, FastApiSearchResponse.class);
             FastApiSearchResponse apiResponse = responseEntity.getBody();
@@ -186,51 +233,120 @@ public class SearchServiceImpl implements SearchService {
                         .build();
             }
 
-            List<FastApiProductResult> pageResults = apiResponse.getResults();
-
-            // Dynamically compute totalElements based on how many items FastAPI returned:
-            // - If exactly `size` items returned → more pages may exist → totalElements = (page+2)*size
-            // - If fewer → this is the last page → totalElements = page*size + actualSize
-            int actualSize = pageResults.size();
-            int totalElements;
-            if (actualSize >= size) {
-                totalElements = (page + 2) * size;
-            } else {
-                totalElements = page * size + actualSize;
-            }
-            int totalPages = (int) Math.ceil((double) totalElements / size);
-
-            List<String> uuids = pageResults.stream()
+            List<FastApiProductResult> resultsList = apiResponse.getResults();
+            List<String> uuids = resultsList.stream()
                     .map(FastApiProductResult::getProductId)
                     .filter(Objects::nonNull)
                     .collect(Collectors.toList());
 
             Map<String, ProductResponse> dbProductsByUuid = productService.getActiveProductsByUuids(uuids);
-            log.info("Hydrated {}/{} semantic results for page {} from database", dbProductsByUuid.size(), uuids.size(), page);
+            log.info("Hydrated {}/{} semantic results from database", dbProductsByUuid.size(), uuids.size());
 
-            List<ProductResponse> content = pageResults.stream()
+            List<ProductResponse> hydratedList = resultsList.stream()
                     .map(res -> {
                         ProductResponse dbProduct = dbProductsByUuid.get(res.getProductId());
                         return dbProduct != null ? dbProduct : mapFromFastApi(res);
                     })
+                    .filter(Objects::nonNull)
                     .collect(Collectors.toList());
 
-            logSearch(query, content.size(), (int) (System.currentTimeMillis() - startTime));
-            return PageResponse.<ProductResponse>builder()
-                    .content(content)
-                    .page(page)
-                    .size(size)
-                    .totalElements(totalElements)
-                    .totalPages(totalPages)
-                    .last(page >= totalPages - 1)
-                    .build();
+            if (needsJavaFilterOrSort) {
+                List<ProductResponse> filteredList = hydratedList;
+
+                // 1. Filter by CategoryMain ID
+                if (mainId != null) {
+                    final Long finalMainId = mainId;
+                    filteredList = filteredList.stream()
+                            .filter(p -> p.getCategory() != null && finalMainId.equals(p.getCategory().getCategoryMainId()))
+                            .collect(Collectors.toList());
+                }
+
+                // 2. Filter by minRating
+                if (minRating != null) {
+                    filteredList = filteredList.stream()
+                            .filter(p -> p.getRatingAvg() != null && p.getRatingAvg().doubleValue() >= minRating)
+                            .collect(Collectors.toList());
+                }
+
+                // 3. Sort by price or date
+                if (sortBy != null && !sortBy.trim().isEmpty()) {
+                    if (sortBy.equalsIgnoreCase("price-asc")) {
+                        filteredList.sort(Comparator.comparing(ProductResponse::getBasePrice, Comparator.nullsLast(Comparator.naturalOrder())));
+                    } else if (sortBy.equalsIgnoreCase("price-desc")) {
+                        filteredList.sort(Comparator.comparing(ProductResponse::getBasePrice, Comparator.nullsLast(Comparator.reverseOrder())));
+                    } else if (sortBy.equalsIgnoreCase("newest")) {
+                        filteredList.sort(Comparator.comparing(ProductResponse::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())));
+                    }
+                }
+
+                int totalElements = filteredList.size();
+                int totalPages = (int) Math.ceil((double) totalElements / size);
+
+                int fromIndex = page * size;
+                int toIndex = Math.min(totalElements, (page + 1) * size);
+
+                List<ProductResponse> content = Collections.emptyList();
+                if (fromIndex < totalElements) {
+                    content = filteredList.subList(fromIndex, toIndex);
+                }
+
+                logSearch(query, content.size(), (int) (System.currentTimeMillis() - startTime));
+                return PageResponse.<ProductResponse>builder()
+                        .content(content)
+                        .page(page)
+                        .size(size)
+                        .totalElements(totalElements)
+                        .totalPages(totalPages)
+                        .last(page >= totalPages - 1)
+                        .build();
+            } else {
+                // Return standard Qdrant-paginated items
+                int actualSize = hydratedList.size();
+                int totalElements;
+                if (actualSize >= size) {
+                    totalElements = (page + 2) * size;
+                } else {
+                    totalElements = page * size + actualSize;
+                }
+                int totalPages = (int) Math.ceil((double) totalElements / size);
+
+                logSearch(query, hydratedList.size(), (int) (System.currentTimeMillis() - startTime));
+                return PageResponse.<ProductResponse>builder()
+                        .content(hydratedList)
+                        .page(page)
+                        .size(size)
+                        .totalElements(totalElements)
+                        .totalPages(totalPages)
+                        .last(page >= totalPages - 1)
+                        .build();
+            }
 
         } catch (Exception e) {
             log.error("Failed to perform paginated semantic search via FastAPI, falling back to database search", e);
             logSearch(query, 0, (int) (System.currentTimeMillis() - startTime));
             try {
+                org.springframework.data.domain.Sort sort = org.springframework.data.domain.Sort.unsorted();
+                if (sortBy != null && !sortBy.trim().isEmpty()) {
+                    if (sortBy.equalsIgnoreCase("price-asc")) {
+                        sort = org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.ASC, "basePrice");
+                    } else if (sortBy.equalsIgnoreCase("price-desc")) {
+                        sort = org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "basePrice");
+                    } else if (sortBy.equalsIgnoreCase("newest")) {
+                        sort = org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt");
+                    }
+                }
+                PageRequest pageRequest = PageRequest.of(page, size, sort);
+
                 return productService.getAll(
-                        null, null, null, null, null, null, null, query, PageRequest.of(page, size)
+                        null,
+                        categorySlug,
+                        categoryMainSlug,
+                        null,
+                        minPrice != null ? BigDecimal.valueOf(minPrice) : null,
+                        maxPrice != null ? BigDecimal.valueOf(maxPrice) : null,
+                        minRating != null ? BigDecimal.valueOf(minRating) : null,
+                        query,
+                        pageRequest
                 );
             } catch (Exception ex) {
                 log.error("Database fallback paginated search failed", ex);
