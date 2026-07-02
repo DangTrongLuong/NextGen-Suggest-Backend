@@ -8,6 +8,11 @@ import java.util.List;
 
 public interface SearchService {
     List<ProductResponse> search(String query, boolean rerank, int topK);
-    PageResponse<ProductResponse> searchPaginated(String query, boolean rerank, int page, int size);
+    PageResponse<ProductResponse> searchPaginated(
+            String query, boolean rerank, int page, int size,
+            String categorySlug, String categoryMainSlug,
+            Double minPrice, Double maxPrice, Double minRating,
+            String sortBy, String sortDir
+    );
     List<String> getTopSearchKeywords(int limit);
 }

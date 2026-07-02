@@ -39,9 +39,18 @@ public class SearchController {
             @RequestParam("q") String query,
             @RequestParam(value = "rerank", defaultValue = "true") boolean rerank,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "12") int size
+            @RequestParam(defaultValue = "12") int size,
+            @RequestParam(required = false) String categorySlug,
+            @RequestParam(required = false) String categoryMainSlug,
+            @RequestParam(required = false) Double minPrice,
+            @RequestParam(required = false) Double maxPrice,
+            @RequestParam(required = false) Double minRating,
+            @RequestParam(required = false) String sortBy,
+            @RequestParam(required = false) String sortDir
     ) {
-        PageResponse<ProductResponse> results = searchService.searchPaginated(query, rerank, page, size);
+        PageResponse<ProductResponse> results = searchService.searchPaginated(
+                query, rerank, page, size, categorySlug, categoryMainSlug, minPrice, maxPrice, minRating, sortBy, sortDir
+        );
         return ResponseEntity.ok(ApiResponse.success(results));
     }
 
