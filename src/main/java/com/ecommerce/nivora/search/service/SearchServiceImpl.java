@@ -16,6 +16,8 @@ import com.ecommerce.nivora.category.entity.Category;
 import com.ecommerce.nivora.category.repository.CategoryRepository;
 import com.ecommerce.nivora.category.entity.CategoryMain;
 import com.ecommerce.nivora.category.repository.CategoryMainRepository;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import java.time.Duration;
 
 
 import lombok.RequiredArgsConstructor;
@@ -51,6 +53,7 @@ public class SearchServiceImpl implements SearchService {
     private final UserRepository userRepository;
     private final CategoryRepository categoryRepository;
     private final CategoryMainRepository categoryMainRepository;
+    private final StringRedisTemplate redisTemplate;
 
     private static final Pattern SLUG_PATTERN = Pattern.compile("[^a-z0-9]+");
 
@@ -108,13 +111,11 @@ public class SearchServiceImpl implements SearchService {
                     .collect(Collectors.toList());
 
             Map<String, ProductResponse> dbProductsByUuid = productService.getActiveProductsByUuids(uuids);
-            log.info("Hydrated {}/{} semantic results from database", dbProductsByUuid.size(), uuids.size());
+            log.info("Hydrated {}/{} semantic results from database. Requested UUIDs: {}, Found Keys: {}", dbProductsByUuid.size(), uuids.size(), uuids, dbProductsByUuid.keySet());
 
             List<ProductResponse> results = apiResponse.getResults().stream()
-                    .map(res -> {
-                        ProductResponse dbProduct = dbProductsByUuid.get(res.getProductId());
-                        return dbProduct != null ? dbProduct : mapFromFastApi(res);
-                    })
+                    .map(res -> dbProductsByUuid.get(res.getProductId()))
+                    .filter(Objects::nonNull)
                     .collect(Collectors.toList());
 
             logSearch(query, results.size(), (int) (System.currentTimeMillis() - startTime));
@@ -240,13 +241,10 @@ public class SearchServiceImpl implements SearchService {
                     .collect(Collectors.toList());
 
             Map<String, ProductResponse> dbProductsByUuid = productService.getActiveProductsByUuids(uuids);
-            log.info("Hydrated {}/{} semantic results from database", dbProductsByUuid.size(), uuids.size());
+            log.info("Hydrated {}/{} semantic results from database. Requested UUIDs: {}, Found Keys: {}", dbProductsByUuid.size(), uuids.size(), uuids, dbProductsByUuid.keySet());
 
             List<ProductResponse> hydratedList = resultsList.stream()
-                    .map(res -> {
-                        ProductResponse dbProduct = dbProductsByUuid.get(res.getProductId());
-                        return dbProduct != null ? dbProduct : mapFromFastApi(res);
-                    })
+                    .map(res -> dbProductsByUuid.get(res.getProductId()))
                     .filter(Objects::nonNull)
                     .collect(Collectors.toList());
 
