@@ -6,7 +6,6 @@ import com.ecommerce.nivora.user.entity.User;
 import com.ecommerce.nivora.user.repository.RoleRepository;
 import com.ecommerce.nivora.user.repository.UserRepository;
 
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -45,18 +44,18 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
     @Override
     @Transactional
     public void onAuthenticationSuccess(HttpServletRequest request,
-                                        HttpServletResponse response,
-                                        Authentication authentication) throws IOException {
+            HttpServletResponse response,
+            Authentication authentication) throws IOException {
         OAuth2User oAuth2User = (OAuth2User) authentication.getPrincipal();
 
-        String email     = extractEmail(oAuth2User);
-        String name      = extractName(oAuth2User);
+        String email = extractEmail(oAuth2User);
+        String name = extractName(oAuth2User);
         String providerId = extractProviderId(oAuth2User);
-        String avatarUrl  = extractAvatar(oAuth2User);
+        String avatarUrl = extractAvatar(oAuth2User);
 
         if (email == null) {
             log.error("OAuth2 login failed: email not found in principal");
-            response.sendRedirect(frontendUrl + "/login?error=email_not_found");
+            response.sendRedirect(frontendUrl + "/?error=email_not_found");
             return;
         }
 
@@ -86,7 +85,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         user.setLastLoginAt(LocalDateTime.now());
         user = userRepository.save(user);
 
-        String accessToken  = jwtUtils.generateAccessToken(email);
+        String accessToken = jwtUtils.generateAccessToken(email);
         String refreshToken = jwtUtils.generateRefreshToken(email);
 
         // Encode user info vào Base64 JSON — frontend dùng luôn, không cần gọi thêm API
@@ -95,17 +94,17 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
                 .collect(Collectors.toSet());
 
         Map<String, Object> userInfo = new HashMap<>();
-        userInfo.put("id",          user.getId());
-        userInfo.put("uuid",        user.getUuid());
-        userInfo.put("name",        user.getName());
-        userInfo.put("email",       user.getEmail());
-        userInfo.put("avatar",      user.getAvatarUrl());
-        userInfo.put("avatarUrl",   user.getAvatarUrl());
-        userInfo.put("roles",       roleNames);
-        userInfo.put("role",        roleNames.contains("admin") ? "admin" : "user");
-        userInfo.put("isActive",    user.getIsActive());
+        userInfo.put("id", user.getId());
+        userInfo.put("uuid", user.getUuid());
+        userInfo.put("name", user.getName());
+        userInfo.put("email", user.getEmail());
+        userInfo.put("avatar", user.getAvatarUrl());
+        userInfo.put("avatarUrl", user.getAvatarUrl());
+        userInfo.put("roles", roleNames);
+        userInfo.put("role", roleNames.contains("admin") ? "admin" : "user");
+        userInfo.put("isActive", user.getIsActive());
 
-        String userJson   = objectMapper.writeValueAsString(userInfo);
+        String userJson = objectMapper.writeValueAsString(userInfo);
         String userBase64 = Base64.getUrlEncoder().withoutPadding().encodeToString(userJson.getBytes());
 
         String redirectUrl = UriComponentsBuilder.fromUriString(frontendUrl + "/oauth2/callback")
@@ -119,25 +118,29 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
     }
 
     private String extractEmail(OAuth2User user) {
-        if (user instanceof OidcUser oidc) return oidc.getEmail();
+        if (user instanceof OidcUser oidc)
+            return oidc.getEmail();
         Object v = user.getAttribute("email");
         return v != null ? v.toString() : null;
     }
 
     private String extractName(OAuth2User user) {
-        if (user instanceof OidcUser oidc) return oidc.getFullName();
+        if (user instanceof OidcUser oidc)
+            return oidc.getFullName();
         Object v = user.getAttribute("name");
         return v != null ? v.toString() : null;
     }
 
     private String extractProviderId(OAuth2User user) {
-        if (user instanceof OidcUser oidc) return oidc.getSubject();
+        if (user instanceof OidcUser oidc)
+            return oidc.getSubject();
         Object v = user.getAttribute("sub");
         return v != null ? v.toString() : null;
     }
 
     private String extractAvatar(OAuth2User user) {
-        if (user instanceof OidcUser oidc) return oidc.getPicture();
+        if (user instanceof OidcUser oidc)
+            return oidc.getPicture();
         Object v = user.getAttribute("picture");
         return v != null ? v.toString() : null;
     }

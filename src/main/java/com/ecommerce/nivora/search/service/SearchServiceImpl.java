@@ -118,6 +118,10 @@ public class SearchServiceImpl implements SearchService {
                     .filter(Objects::nonNull)
                     .collect(Collectors.toList());
 
+            if (results.isEmpty()) {
+                throw new RuntimeException("No active matching products found in local database for the returned semantic UUIDs");
+            }
+
             logSearch(query, results.size(), (int) (System.currentTimeMillis() - startTime));
             return results;
 
@@ -247,6 +251,10 @@ public class SearchServiceImpl implements SearchService {
                     .map(res -> dbProductsByUuid.get(res.getProductId()))
                     .filter(Objects::nonNull)
                     .collect(Collectors.toList());
+
+            if (hydratedList.isEmpty()) {
+                throw new RuntimeException("No active matching products found in local database for the returned semantic UUIDs");
+            }
 
             if (needsJavaFilterOrSort) {
                 List<ProductResponse> filteredList = hydratedList;

@@ -31,6 +31,9 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     java.util.List<Product> findByNameIgnoreCaseAndBrandIgnoreCaseAndDeletedAtIsNull(
             @Param("name") String name, @Param("brand") String brand);
 
+    @Query("SELECT p FROM Product p WHERE LOWER(p.name) = LOWER(:name) AND p.deletedAt IS NULL")
+    java.util.List<Product> findByNameIgnoreCaseAndDeletedAtIsNull(@Param("name") String name);
+
     @Query("SELECT COUNT(p) > 0 FROM Product p WHERE LOWER(p.brand) = LOWER(:brand) AND p.deletedAt IS NULL")
     boolean existsByBrandIgnoreCaseAndDeletedAtIsNull(@Param("brand") String brand);
 

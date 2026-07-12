@@ -60,6 +60,9 @@ public class SearchPopupServiceImpl implements SearchPopupService {
         CompletableFuture<List<String>> trendingFuture = CompletableFuture.supplyAsync(this::getTrending);
         CompletableFuture<List<CategoryResponse>> categoriesFuture = CompletableFuture.supplyAsync(this::getPopularCategories);
 
+        // Chain related searches from recentFuture to run in parallel
+        CompletableFuture<List<String>> relatedFuture = recentFuture.thenApplyAsync(this::getRelatedSearches);
+
         CompletableFuture.allOf(historyFuture, recentFuture, trendingFuture, categoriesFuture).join();
 
         List<String> history = historyFuture.join();
@@ -67,8 +70,15 @@ public class SearchPopupServiceImpl implements SearchPopupService {
         List<String> trending = trendingFuture.join();
         List<CategoryResponse> categories = categoriesFuture.join();
 
-        // 2. Fetch related queries from FastAPI based on last viewed product category
-        List<String> related = getRelatedSearches(recent);
+        // 2. Fetch related queries from FastAPI with a strict timeout to prevent hanging
+        List<String> related = Collections.emptyList();
+        try {
+            related = relatedFuture.get(800, java.util.concurrent.TimeUnit.MILLISECONDS);
+        } catch (java.util.concurrent.TimeoutException e) {
+            log.warn("FastAPI related searches query timed out (800ms limit reached)");
+        } catch (Exception e) {
+            log.warn("Failed to fetch related searches from FastAPI: {}", e.getMessage());
+        }
 
         return SearchPopupResponse.builder()
                 .searchHistory(history)
@@ -96,7 +106,11 @@ public class SearchPopupServiceImpl implements SearchPopupService {
                     .build()
                     .toUriString();
 
-            FastApiAutocompleteResponse apiResponse = restTemplate.getForObject(url, FastApiAutocompleteResponse.class);
+            CompletableFuture<FastApiAutocompleteResponse> apiResponseFuture = CompletableFuture.supplyAsync(
+                    () -> restTemplate.getForObject(url, FastApiAutocompleteResponse.class)
+            );
+
+            FastApiAutocompleteResponse apiResponse = apiResponseFuture.get(800, java.util.concurrent.TimeUnit.MILLISECONDS);
             if (apiResponse != null && apiResponse.getSuggestions() != null) {
                 List<AutocompleteResponse.Suggestion> suggestions = apiResponse.getSuggestions().stream()
                         .map(s -> {
@@ -121,6 +135,8 @@ public class SearchPopupServiceImpl implements SearchPopupService {
                         .suggestions(suggestions)
                         .build();
             }
+        } catch (java.util.concurrent.TimeoutException e) {
+            log.warn("FastAPI autocomplete suggestions query timed out (800ms limit reached) for query '{}'", query);
         } catch (Exception e) {
             log.error("Failed to fetch autocomplete suggestions from FastAPI", e);
         }

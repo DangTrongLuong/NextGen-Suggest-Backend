@@ -1,5 +1,6 @@
 server:
   port: 8080
+  forward-headers-strategy: framework
 
 spring:
   config:
@@ -14,6 +15,12 @@ spring:
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
       timeout: ${REDIS_TIMEOUT:2000ms}
+
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
 
   datasource:
     url: ${DB_URL}
@@ -88,6 +95,10 @@ app:
   fastapi-url: ${FASTAPI_URL:http://127.0.0.1:8000}
   cache:
     search-ttl-minutes: 60
+  rabbitmq:
+    exchange: ${RABBITMQ_EXCHANGE:product.exchange}
+    queue: ${RABBITMQ_QUEUE:product.indexing.queue}
+    routing-key: ${RABBITMQ_ROUTING_KEY:product.indexing}
 
 springdoc:
   api-docs:

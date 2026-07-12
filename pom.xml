@@ -122,6 +122,12 @@
             <version>2.3.0</version>
         </dependency>
 
+        <!-- ── AMQP / RabbitMQ ── -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
+
         <!-- ── DevTools ── -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
