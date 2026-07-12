@@ -13,7 +13,10 @@ import com.ecommerce.nivora.security.utils.SecurityUtils;
 import com.ecommerce.nivora.user.entity.User;
 import com.ecommerce.nivora.chat.entity.ChatLog;
 import com.ecommerce.nivora.chat.repository.ChatLogRepository;
-
+import com.ecommerce.nivora.product.repository.ProductRepository;
+import com.ecommerce.nivora.common.dto.response.PageResponse;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,6 +39,7 @@ public class ChatServiceImpl implements ChatService {
     private final ProductService productService;
     private final SecurityUtils securityUtils;
     private final ChatLogRepository chatLogRepository;
+    private final ProductRepository productRepository;
 
     private static final Pattern SLUG_PATTERN = Pattern.compile("[^a-z0-9]+");
 
@@ -128,17 +132,55 @@ public class ChatServiceImpl implements ChatService {
                         .collect(Collectors.toList());
 
                 Map<String, ProductResponse> dbProductsByUuid = productService.getActiveProductsByUuids(skus);
+                
+                // Chuẩn hóa key thành chữ thường để tìm kiếm case-insensitive trong Map
+                Map<String, ProductResponse> dbProductsByUuidLower = new HashMap<>();
+                dbProductsByUuid.forEach((k, v) -> {
+                    if (k != null) {
+                        dbProductsByUuidLower.put(k.toLowerCase(), v);
+                    }
+                });
+                
                 log.info("Hydrated {}/{} semantic chatbot suggested products from database", dbProductsByUuid.size(), skus.size());
 
                 for (FastApiProductResult res : apiResponse.getSuggestedProducts()) {
-                    ProductResponse dbProduct = dbProductsByUuid.get(res.getProductId());
+                    String pid = res.getProductId() != null ? res.getProductId().toLowerCase() : "";
+                    ProductResponse dbProduct = dbProductsByUuidLower.get(pid);
+                    
+                    // Thử tìm kiếm fallback theo tên sản phẩm trong DB nếu không khớp UUID
+                    if (dbProduct == null && res.getTitle() != null && !res.getTitle().isBlank()) {
+                        List<com.ecommerce.nivora.product.entity.Product> matchedByName = 
+                                productRepository.findByNameIgnoreCaseAndDeletedAtIsNull(res.getTitle().trim());
+                        if (matchedByName != null && !matchedByName.isEmpty()) {
+                            try {
+                                dbProduct = productService.getById(matchedByName.get(0).getId());
+                            } catch (Exception ignored) {}
+                        }
+                    }
+                    
                     if (dbProduct != null) {
                         // Thiết lập điểm số và lý do gợi ý cho sản phẩm chatbot
                         dbProduct.setRecommendationScore(res.getScore());
                         dbProduct.setRecommendationReason(res.getReason() != null ? res.getReason() : "Gợi ý từ trợ lý AI");
                         hydratedProducts.add(dbProduct);
-                    } else {
-                        hydratedProducts.add(mapFromFastApi(res));
+                    }
+                }
+                
+                // Fallback: Nếu không tìm thấy bất kỳ sản phẩm nào có sẵn trong database local,
+                // truy vấn database local bằng từ khóa tin nhắn cuối cùng để tìm sản phẩm liên quan.
+                if (hydratedProducts.isEmpty()) {
+                    String lastMessage = request.getMessages().get(request.getMessages().size() - 1).getContent();
+                    log.info("Suggested products empty after hydration. Querying MySQL fallback search for: {}", lastMessage);
+                    try {
+                        PageResponse<ProductResponse> localSearch = productService.getAll(
+                                null, null, null, null, null, null, null, lastMessage,
+                                PageRequest.of(0, 4, Sort.by(Sort.Direction.DESC, "createdAt"))
+                        );
+                        if (localSearch != null && localSearch.getContent() != null) {
+                            hydratedProducts.addAll(localSearch.getContent());
+                        }
+                    } catch (Exception ex) {
+                        log.error("Failed to perform local search fallback for chatbot suggested products", ex);
                     }
                 }
             }

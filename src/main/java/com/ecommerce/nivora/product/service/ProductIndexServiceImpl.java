@@ -2,10 +2,10 @@ package com.ecommerce.nivora.product.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 import java.util.List;
 import java.util.Map;
 
@@ -14,10 +14,13 @@ import java.util.Map;
 @Slf4j
 public class ProductIndexServiceImpl implements ProductIndexService {
 
-    private final RestTemplate restTemplate;
+    private final RabbitTemplate rabbitTemplate;
 
-    @Value("${app.fastapi-url}")
-    private String fastApiUrl;
+    @Value("${app.rabbitmq.exchange}")
+    private String exchange;
+
+    @Value("${app.rabbitmq.routing-key}")
+    private String routingKey;
 
     @Override
     @Async
@@ -26,13 +29,15 @@ public class ProductIndexServiceImpl implements ProductIndexService {
             return;
         }
         try {
-            String url = fastApiUrl + "/api/v1/indexing/sync";
-            log.info("Sending async index request to FastAPI for product UUID: {}", productUuid);
-            Map<String, Object> request = Map.of("product_uuids", List.of(productUuid));
-            restTemplate.postForEntity(url, request, Void.class);
-            log.info("Successfully sent async index request for product UUID: {}", productUuid);
+            log.info("Sending async index message to RabbitMQ for product UUID: {}", productUuid);
+            Map<String, Object> message = Map.of(
+                "action", "sync",
+                "product_uuids", List.of(productUuid)
+            );
+            rabbitTemplate.convertAndSend(exchange, routingKey, message);
+            log.info("Successfully published sync message for product UUID: {}", productUuid);
         } catch (Exception e) {
-            log.error("Failed to index product UUID {} in Qdrant", productUuid, e);
+            log.error("Failed to publish sync message for product UUID {} to RabbitMQ", productUuid, e);
         }
     }
 
@@ -43,13 +48,15 @@ public class ProductIndexServiceImpl implements ProductIndexService {
             return;
         }
         try {
-            String url = fastApiUrl + "/api/v1/indexing/delete";
-            log.info("Sending async delete request to FastAPI for product UUID: {}", productUuid);
-            Map<String, Object> request = Map.of("product_uuids", List.of(productUuid));
-            restTemplate.postForEntity(url, request, Void.class);
-            log.info("Successfully sent async delete request for product UUID: {}", productUuid);
+            log.info("Sending async delete message to RabbitMQ for product UUID: {}", productUuid);
+            Map<String, Object> message = Map.of(
+                "action", "delete",
+                "product_uuids", List.of(productUuid)
+            );
+            rabbitTemplate.convertAndSend(exchange, routingKey, message);
+            log.info("Successfully published delete message for product UUID: {}", productUuid);
         } catch (Exception e) {
-            log.error("Failed to delete product UUID {} from Qdrant", productUuid, e);
+            log.error("Failed to publish delete message for product UUID {} to RabbitMQ", productUuid, e);
         }
     }
 }
