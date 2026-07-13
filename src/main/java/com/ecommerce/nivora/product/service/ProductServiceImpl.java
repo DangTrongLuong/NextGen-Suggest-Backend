@@ -318,9 +318,9 @@ public class ProductServiceImpl implements ProductService {
         Category category = categoryRepository.findById(request.getCategoryId())
                 .orElseThrow(() -> new ResourceNotFoundException("Category", request.getCategoryId()));
 
-        if (categoryRepository.existsByParentIdAndDeletedAtIsNull(category.getId())) {
-            throw new BadRequestException("Sản phẩm chỉ có thể thuộc về danh mục lá (leaf category)");
-        }
+        // if (categoryRepository.existsByParentIdAndDeletedAtIsNull(category.getId())) {
+        //     throw new BadRequestException("Sản phẩm chỉ có thể thuộc về danh mục lá (leaf category)");
+        // }
 
         if (request.getVariants() == null || request.getVariants().isEmpty()) {
             throw new BadRequestException("Sản phẩm phải có ít nhất một phiên bản (variant)");
@@ -425,9 +425,9 @@ public class ProductServiceImpl implements ProductService {
         Category category = categoryRepository.findById(request.getCategoryId())
                 .orElseThrow(() -> new ResourceNotFoundException("Category", request.getCategoryId()));
 
-        if (categoryRepository.existsByParentIdAndDeletedAtIsNull(category.getId())) {
-            throw new BadRequestException("Sản phẩm chỉ có thể thuộc về danh mục lá (leaf category)");
-        }
+        // if (categoryRepository.existsByParentIdAndDeletedAtIsNull(category.getId())) {
+        //     throw new BadRequestException("Sản phẩm chỉ có thể thuộc về danh mục lá (leaf category)");
+        // }
 
         product.setCategory(category);
         product.setName(request.getName());
