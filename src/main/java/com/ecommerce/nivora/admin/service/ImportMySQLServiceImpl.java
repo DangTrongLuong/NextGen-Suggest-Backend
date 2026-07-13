@@ -207,6 +207,31 @@ public class ImportMySQLServiceImpl implements ImportMySQLService {
                 .imageUrl(imageUrl)
                 .build();
 
+        // Build attributes JSON containing all Qdrant fields
+        Map<String, Object> attrMap = new HashMap<>();
+        String[] qdrantFields = {
+            "product_id", "product_name", "description", "category_name", "category_slug",
+            "category_url", "category_image_url", "brand", "price", "original_price",
+            "currency", "stock", "rating", "reviews_count", "thumbnail_url", "image_urls",
+            "tags", "color", "size", "material", "product_url", "source", "searchable_text"
+        };
+        for (String field : qdrantFields) {
+            Object val = row.get(field);
+            if (val != null) {
+                attrMap.put(field, val);
+            }
+        }
+        attrMap.putIfAbsent("color", rawColor);
+        attrMap.putIfAbsent("size", rawSize);
+        attrMap.putIfAbsent("material", row.get("material"));
+
+        String attributesJson = "{}";
+        try {
+            attributesJson = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(attrMap);
+        } catch (Exception e) {
+            log.error("Failed to serialize attributes to JSON", e);
+        }
+
         ProductRequest request = ProductRequest.builder()
                 .name(name)
                 .description(description)
@@ -221,6 +246,7 @@ public class ImportMySQLServiceImpl implements ImportMySQLService {
                 .color(rawColor)
                 .size(rawSize)
                 .sku(sku)
+                .attributes(attributesJson)
                 .variants(List.of(variantRequest))
                 .isActive(true)
                 .build();
