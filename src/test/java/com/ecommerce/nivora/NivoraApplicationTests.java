@@ -8,6 +8,7 @@ import com.ecommerce.nivora.product.entity.ProductVariant;
 import com.ecommerce.nivora.product.repository.ProductRepository;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -32,8 +33,14 @@ class NivoraApplicationTests {
     private CategoryRepository categoryRepository;
 
     @Test
+    void contextLoads() {
+        // Kiểm tra xem Spring ApplicationContext khởi động thành công
+    }
+
+    @Test
     @Transactional
     @Commit
+    @Disabled("Chỉ chạy thủ công để seed dữ liệu vào database thực tế, bỏ qua khi chạy CI/CD")
     void seedProducts() throws Exception {
         String jsonlPath = "../ecommerce-backend-fastapi/data/processed/products_with_documents.jsonl";
         ObjectMapper mapper = new ObjectMapper();
