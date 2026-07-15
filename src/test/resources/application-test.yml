@@ -1,0 +1,48 @@
+spring:
+  main:
+    allow-bean-definition-overriding: true
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=MySQL
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+    hikari:
+      connection-timeout: 30000
+      maximum-pool-size: 5
+      minimum-idle: 1
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        format_sql: false
+
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+      - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
+
+# Giả lập các biến môi trường cấu hình bắt buộc để Spring Boot ApplicationContext khởi động thành công
+DB_URL: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=MySQL
+DB_USERNAME: sa
+DB_PASSWORD: ""
+
+JWT_SECRET: "my-super-secret-jwt-key-for-testing-purposes-only-32-bytes-minimum"
+JWT_EXPIRATION: "3600000"
+JWT_REFRESH_EXPIRATION: "86400000"
+
+CLOUD_NAME: "test-cloud"
+CLOUD_API_KEY: "test-key"
+CLOUD_API_SECRET: "test-secret"
+
+CLIENT_ID_GG: "test-google-client-id"
+CLIENT_SECRET_GG: "test-google-client-secret"
+
+MAIL_USERNAME: "test-mail@gmail.com"
+MAIL_PASSWORD: "test-password"
+
+FRONTEND_URL: "http://localhost:3000"
+BACKEND_URL: "http://localhost:8080"
