@@ -15,6 +15,7 @@ import com.ecommerce.nivora.user.entity.Role;
 import com.ecommerce.nivora.user.entity.User;
 import com.ecommerce.nivora.user.repository.RoleRepository;
 import com.ecommerce.nivora.user.repository.UserRepository;
+import com.ecommerce.nivora.auth.dto.request.VerifyRequest;
 
 
 import lombok.RequiredArgsConstructor;
@@ -53,6 +54,7 @@ public class AuthServiceImpl implements AuthService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtils jwtUtils;
+    private final EmailService emailService;
 
     @Override
     @Transactional
@@ -60,21 +62,36 @@ public class AuthServiceImpl implements AuthService {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new ConflictException("Email already registered");
         }
+        if (userRepository.existsByName(request.getName())) {
+            throw new ConflictException("Name already in use");
+        }
 
         Role customerRole = roleRepository.findByName("customer")
                 .orElseGet(() -> roleRepository.save(
                     Role.builder().name("customer").displayName("Customer").build()));
+
+        String verificationCode = String.format("%08d", new java.util.Random().nextInt(100000000));
 
         User user = User.builder()
                 .name(request.getName())
                 .email(request.getEmail())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .roles(Set.of(customerRole))
-                .isActive(true)
+                .isActive(false)
+                .verificationCode(verificationCode)
+                .tokenVersion(0)
                 .build();
 
         userRepository.save(user);
-        return buildAuthResponse(user);
+
+        emailService.sendVerificationCode(user.getEmail(), verificationCode);
+
+        return AuthResponse.builder()
+                .accessToken(null)
+                .refreshToken(null)
+                .tokenType("Bearer")
+                .user(toUserResponse(user))
+                .build();
     }
 
     @Override
@@ -88,7 +105,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         if (!user.getIsActive()) {
-            throw new UnauthorizedException("Account is disabled");
+            throw new UnauthorizedException("Account not verified");
         }
 
         user.setLastLoginAt(LocalDateTime.now());
@@ -118,11 +135,62 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public void logout(String refreshToken) {
+        try {
+            String email = jwtUtils.extractEmail(refreshToken);
+            userRepository.findByEmail(email).ifPresent(user -> {
+                user.setTokenVersion(user.getTokenVersion() + 1);
+                userRepository.save(user);
+                log.info("Incremented token version to {} for user {} during logout", user.getTokenVersion(), email);
+            });
+        } catch (Exception e) {
+            log.warn("Failed to increment token version during logout: {}", e.getMessage());
+        }
         String tokenHash = hashToken(refreshToken);
         refreshTokenRepository.findByTokenHash(tokenHash).ifPresent(t -> {
             t.setRevokedAt(LocalDateTime.now());
             refreshTokenRepository.save(t);
         });
+    }
+
+    @Override
+    @Transactional
+    public AuthResponse verifyCode(VerifyRequest request) {
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new UnauthorizedException("User not found"));
+
+        if (user.getIsActive()) {
+            throw new ConflictException("Account is already verified");
+        }
+
+        if (user.getVerificationCode() == null || !user.getVerificationCode().equals(request.getCode())) {
+            throw new BadRequestException("Mã xác nhận không đúng");
+        }
+
+        user.setIsActive(true);
+        user.setVerificationCode(null);
+        user.setEmailVerifiedAt(LocalDateTime.now());
+        userRepository.save(user);
+
+        log.info("User {} verified successfully and activated", user.getEmail());
+        return buildAuthResponse(user);
+    }
+
+    @Override
+    @Transactional
+    public void resendVerificationCode(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new UnauthorizedException("User not found"));
+
+        if (user.getIsActive()) {
+            throw new ConflictException("Account is already verified");
+        }
+
+        String code = String.format("%08d", new java.util.Random().nextInt(100000000));
+        user.setVerificationCode(code);
+        userRepository.save(user);
+
+        emailService.sendVerificationCode(user.getEmail(), code);
+        log.info("Resent verification code to {}", email);
     }
 
     @Override

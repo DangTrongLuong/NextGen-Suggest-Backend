@@ -3,6 +3,7 @@ package com.ecommerce.nivora.auth.controller;
 import com.ecommerce.nivora.auth.dto.request.LoginRequest;
 import com.ecommerce.nivora.auth.dto.request.RefreshTokenRequest;
 import com.ecommerce.nivora.auth.dto.request.RegisterRequest;
+import com.ecommerce.nivora.auth.dto.request.VerifyRequest;
 import com.ecommerce.nivora.auth.dto.response.AuthResponse;
 import com.ecommerce.nivora.auth.service.AuthService;
 import com.ecommerce.nivora.common.dto.response.ApiResponse;
@@ -48,5 +49,18 @@ public class AuthController {
     public ResponseEntity<ApiResponse<Void>> logout(@Valid @RequestBody RefreshTokenRequest request) {
         authService.logout(request.getRefreshToken());
         return ResponseEntity.ok(ApiResponse.success("Logged out successfully", null));
+    }
+
+    @PostMapping("/verify")
+    @Operation(summary = "Verify account with 8-digit code")
+    public ResponseEntity<ApiResponse<AuthResponse>> verify(@Valid @RequestBody VerifyRequest request) {
+        return ResponseEntity.ok(ApiResponse.success("Account activated successfully", authService.verifyCode(request)));
+    }
+
+    @PostMapping("/resend-code")
+    @Operation(summary = "Resend verification code")
+    public ResponseEntity<ApiResponse<Void>> resendCode(@RequestParam String email) {
+        authService.resendVerificationCode(email);
+        return ResponseEntity.ok(ApiResponse.success("Verification code sent successfully", null));
     }
 }
