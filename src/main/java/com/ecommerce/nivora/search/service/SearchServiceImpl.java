@@ -15,6 +15,7 @@ import com.ecommerce.nivora.user.repository.UserRepository;
 import com.ecommerce.nivora.category.entity.Category;
 import com.ecommerce.nivora.category.repository.CategoryRepository;
 import com.ecommerce.nivora.category.entity.CategoryMain;
+import com.ecommerce.nivora.category.repository.CategoryMainRepository;
 import com.ecommerce.nivora.search.util.SearchQuerySanitizer;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import java.time.Duration;
