@@ -15,7 +15,7 @@ import com.ecommerce.nivora.user.repository.UserRepository;
 import com.ecommerce.nivora.category.entity.Category;
 import com.ecommerce.nivora.category.repository.CategoryRepository;
 import com.ecommerce.nivora.category.entity.CategoryMain;
-import com.ecommerce.nivora.category.repository.CategoryMainRepository;
+import com.ecommerce.nivora.search.util.SearchQuerySanitizer;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import java.time.Duration;
 
@@ -62,7 +62,10 @@ public class SearchServiceImpl implements SearchService {
 
     @Override
     public List<ProductResponse> search(String query, boolean rerank, int topK) {
-        if (query == null || query.trim().isEmpty()) {
+        if (query == null || query.trim().isEmpty() || SearchQuerySanitizer.isMaliciousOrInvalid(query)) {
+            if (query != null && SearchQuerySanitizer.isMaliciousOrInvalid(query)) {
+                log.warn("Blocked malicious/invalid search query: '{}'", query);
+            }
             return Collections.emptyList();
         }
 
@@ -147,7 +150,10 @@ public class SearchServiceImpl implements SearchService {
             Double minPrice, Double maxPrice, Double minRating,
             String sortBy, String sortDir
     ) {
-        if (query == null || query.trim().isEmpty()) {
+        if (query == null || query.trim().isEmpty() || SearchQuerySanitizer.isMaliciousOrInvalid(query)) {
+            if (query != null && SearchQuerySanitizer.isMaliciousOrInvalid(query)) {
+                log.warn("Blocked malicious/invalid paginated search query: '{}'", query);
+            }
             return PageResponse.<ProductResponse>builder()
                     .content(Collections.emptyList())
                     .page(page)
@@ -378,7 +384,7 @@ public class SearchServiceImpl implements SearchService {
             }
             return topQueries.stream()
                     .map(row -> row != null && row.length > 0 && row[0] != null ? row[0].toString().trim() : null)
-                    .filter(q -> q != null && !q.isEmpty())
+                    .filter(q -> q != null && !q.isEmpty() && !SearchQuerySanitizer.isMaliciousOrInvalid(q))
                     .collect(Collectors.toList());
         } catch (Exception e) {
             log.error("Failed to fetch top search keywords", e);
@@ -387,6 +393,9 @@ public class SearchServiceImpl implements SearchService {
     }
 
     private void logSearch(String query, int resultsCount, int latencyMs) {
+        if (SearchQuerySanitizer.isMaliciousOrInvalid(query)) {
+            return;
+        }
         try {
             String sessionId = "anonymous";
             try {

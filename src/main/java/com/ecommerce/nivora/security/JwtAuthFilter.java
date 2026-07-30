@@ -13,6 +13,8 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+import com.ecommerce.nivora.user.entity.User;
+import com.ecommerce.nivora.user.repository.UserRepository;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -26,6 +28,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtUtils jwtUtils;
     private final UserDetailsServiceImpl userDetailsService;
+    private final UserRepository userRepository;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -35,11 +38,18 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             String token = extractToken(request);
             if (token != null && jwtUtils.validateToken(token)) {
                 String email = jwtUtils.extractEmail(token);
-                UserDetails userDetails = userDetailsService.loadUserByUsername(email);
-                var auth = new UsernamePasswordAuthenticationToken(
-                        userDetails, null, userDetails.getAuthorities());
-                auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                SecurityContextHolder.getContext().setAuthentication(auth);
+                Integer tokenVersion = jwtUtils.extractTokenVersion(token);
+                User user = userRepository.findByEmail(email).orElse(null);
+                if (user != null && user.getIsActive() && (tokenVersion == null || tokenVersion.equals(user.getTokenVersion()))) {
+                    UserDetails userDetails = userDetailsService.loadUserByUsername(email);
+                    var auth = new UsernamePasswordAuthenticationToken(
+                            userDetails, null, userDetails.getAuthorities());
+                    auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                    SecurityContextHolder.getContext().setAuthentication(auth);
+                } else {
+                    log.warn("Authentication failed: User {} is inactive or token version mismatch. Token version: {}, User DB version: {}", 
+                            email, tokenVersion, user != null ? user.getTokenVersion() : "null");
+                }
             }
         } catch (Exception e) {
             log.error("Cannot set user authentication: {}", e.getMessage());

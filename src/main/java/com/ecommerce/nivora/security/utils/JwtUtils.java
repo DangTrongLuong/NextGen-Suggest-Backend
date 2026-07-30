@@ -6,6 +6,9 @@ import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import com.ecommerce.nivora.user.entity.User;
+import com.ecommerce.nivora.user.entity.Role;
+import java.util.stream.Collectors;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
@@ -24,18 +27,35 @@ public class JwtUtils {
     @Value("${jwt.refresh-expiration}")
     private long refreshExpiration;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.context.annotation.Lazy
+    private com.ecommerce.nivora.user.repository.UserRepository userRepository;
+
     private SecretKey getSigningKey() {
         byte[] keyBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
         return Keys.hmacShaKeyFor(keyBytes);
     }
 
     public String generateAccessToken(String email) {
-        return Jwts.builder()
+        User user = userRepository.findByEmail(email).orElse(null);
+        var builder = Jwts.builder()
                 .subject(email)
                 .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + jwtExpiration))
-                .signWith(getSigningKey())
-                .compact();
+                .expiration(new Date(System.currentTimeMillis() + jwtExpiration));
+        if (user != null) {
+            builder.claim("roles", user.getRoles().stream().map(Role::getName).collect(Collectors.toList()))
+                   .claim("tokenVersion", user.getTokenVersion());
+        }
+        return builder.signWith(getSigningKey()).compact();
+    }
+
+    public Integer extractTokenVersion(String token) {
+        try {
+            Claims claims = parseClaims(token);
+            return claims.get("tokenVersion", Integer.class);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     public String generateRefreshToken(String email) {

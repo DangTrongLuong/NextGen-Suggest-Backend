@@ -15,6 +15,7 @@ import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import com.ecommerce.nivora.search.util.SearchQuerySanitizer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -179,7 +180,9 @@ public class SearchPopupServiceImpl implements SearchPopupService {
             } else {
                 dbHistory = Collections.emptyList();
             }
-            return dbHistory;
+            return dbHistory.stream()
+                    .filter(h -> h != null && !SearchQuerySanitizer.isMaliciousOrInvalid(h))
+                    .collect(Collectors.toList());
         } catch (Exception e) {
             log.error("Error reading search history from MySQL", e);
             return Collections.emptyList();
@@ -235,6 +238,7 @@ public class SearchPopupServiceImpl implements SearchPopupService {
             List<Object[]> dbTrending = searchLogRepository.findTopQueriesSince(LocalDateTime.now().minusHours(24), PageRequest.of(0, 10));
             List<String> trending = dbTrending.stream()
                     .map(row -> (String) row[0])
+                    .filter(h -> h != null && !SearchQuerySanitizer.isMaliciousOrInvalid(h))
                     .collect(Collectors.toList());
 
             if (!trending.isEmpty()) {

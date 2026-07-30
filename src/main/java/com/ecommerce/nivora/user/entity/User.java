@@ -96,6 +96,14 @@ public class User {
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
+    @Column(name = "token_version", nullable = false)
+    @Builder.Default
+    private Integer tokenVersion = 0;
+
+    @Column(name = "verification_code", length = 8)
+    private String verificationCode;
+
+
     @PrePersist
     protected void onCreate() {
         createdAt = updatedAt = LocalDateTime.now();
