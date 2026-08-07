@@ -33,6 +33,6 @@ build/
 .vscode/
 
 .env
-.env.example
 .env.*
+!.env.example
 HELP.md
