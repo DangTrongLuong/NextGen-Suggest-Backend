@@ -14,6 +14,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
+
 @Service
 @RequiredArgsConstructor
 public class CategoryMainServiceImpl implements CategoryMainService {
@@ -22,6 +25,7 @@ public class CategoryMainServiceImpl implements CategoryMainService {
     private final SlugUtils slugUtils;
 
     @Override
+    @Cacheable(value = "category_mains", key = "'all'")
     @Transactional(readOnly = true)
     public List<CategoryMainResponse> getAll() {
         return categoryMainRepository.findByDeletedAtIsNullOrderByDisplayOrderAsc()
@@ -44,6 +48,7 @@ public class CategoryMainServiceImpl implements CategoryMainService {
     }
 
     @Override
+    @CacheEvict(value = "category_mains", allEntries = true)
     @Transactional
     public CategoryMainResponse create(CategoryMainRequest request) {
         String slug = request.getSlug() != null && !request.getSlug().isBlank()
@@ -66,6 +71,7 @@ public class CategoryMainServiceImpl implements CategoryMainService {
     }
 
     @Override
+    @CacheEvict(value = "category_mains", allEntries = true)
     @Transactional
     public CategoryMainResponse update(Long id, CategoryMainRequest request) {
         CategoryMain main = categoryMainRepository.findById(id)
@@ -87,6 +93,7 @@ public class CategoryMainServiceImpl implements CategoryMainService {
     }
 
     @Override
+    @CacheEvict(value = "category_mains", allEntries = true)
     @Transactional
     public void delete(Long id) {
         CategoryMain main = categoryMainRepository.findById(id)
