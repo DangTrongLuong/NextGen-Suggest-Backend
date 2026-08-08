@@ -23,6 +23,10 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
+import org.hibernate.Hibernate;
+
 @Service
 @RequiredArgsConstructor
 public class CategoryServiceImpl implements CategoryService {
@@ -32,6 +36,7 @@ public class CategoryServiceImpl implements CategoryService {
     private final SlugUtils slugUtils;
 
     @Override
+    @Cacheable(value = "categories", key = "'all'")
     @Transactional(readOnly = true)
     public List<CategoryResponse> getAll() {
         return categoryRepository.findByIsActiveTrueAndDeletedAtIsNullOrderByDisplayOrderAsc()
@@ -78,6 +83,7 @@ public class CategoryServiceImpl implements CategoryService {
     }
 
     @Override
+    @CacheEvict(value = "categories", allEntries = true)
     @Transactional
     public CategoryResponse create(CategoryRequest request) {
         String slug = request.getSlug() != null && !request.getSlug().isBlank()
@@ -134,6 +140,7 @@ public class CategoryServiceImpl implements CategoryService {
     }
 
     @Override
+    @CacheEvict(value = "categories", allEntries = true)
     @Transactional
     public CategoryResponse update(Long id, CategoryRequest request) {
         Category category = categoryRepository.findById(id)
@@ -169,6 +176,7 @@ public class CategoryServiceImpl implements CategoryService {
     }
 
     @Override
+    @CacheEvict(value = "categories", allEntries = true)
     @Transactional
     public void delete(Long id) {
         Category category = categoryRepository.findById(id)
@@ -178,6 +186,10 @@ public class CategoryServiceImpl implements CategoryService {
     }
 
     private CategoryResponse toResponse(Category c) {
+        int count = 0;
+        if (Hibernate.isInitialized(c.getProducts()) && c.getProducts() != null) {
+            count = c.getProducts().size();
+        }
         return CategoryResponse.builder()
                 .id(c.getId())
                 .name(c.getName())
@@ -191,7 +203,7 @@ public class CategoryServiceImpl implements CategoryService {
                 .parentName(c.getParent() != null ? c.getParent().getName() : null)
                 .categoryMainId(c.getCategoryMain() != null ? c.getCategoryMain().getId() : null)
                 .categoryMainName(c.getCategoryMain() != null ? c.getCategoryMain().getName() : null)
-                .productCount(c.getProducts() != null ? c.getProducts().size() : 0)
+                .productCount(count)
                 .build();
     }
 
