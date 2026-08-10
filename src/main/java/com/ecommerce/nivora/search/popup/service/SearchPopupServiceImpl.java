@@ -172,16 +172,28 @@ public class SearchPopupServiceImpl implements SearchPopupService {
 
     private List<String> getHistory(Long userId, String sessionId, String userOrSessionId) {
         try {
-            List<String> dbHistory;
+            List<String> dbHistory = new ArrayList<>();
             if (userId != null) {
-                dbHistory = searchLogRepository.findRecentQueriesByUserId(userId, PageRequest.of(0, 5));
+                dbHistory = searchLogRepository.findRecentQueriesByUserId(userId, PageRequest.of(0, 10));
             } else if (sessionId != null && !sessionId.isBlank()) {
-                dbHistory = searchLogRepository.findRecentQueriesBySessionId(sessionId, PageRequest.of(0, 5));
-            } else {
-                dbHistory = Collections.emptyList();
+                dbHistory = searchLogRepository.findRecentQueriesBySessionId(sessionId, PageRequest.of(0, 10));
             }
+
+            if (dbHistory.size() < 5) {
+                List<Object[]> topObjs = searchLogRepository.findTopQueries(PageRequest.of(0, 10));
+                for (Object[] obj : topObjs) {
+                    if (obj != null && obj.length > 0 && obj[0] != null) {
+                        String q = (String) obj[0];
+                        if (!dbHistory.contains(q)) {
+                            dbHistory.add(q);
+                        }
+                    }
+                }
+            }
+
             return dbHistory.stream()
                     .filter(h -> h != null && !SearchQuerySanitizer.isMaliciousOrInvalid(h))
+                    .limit(12)
                     .collect(Collectors.toList());
         } catch (Exception e) {
             log.error("Error reading search history from MySQL", e);
