@@ -95,6 +95,10 @@ public class SearchServiceImpl implements SearchService {
                     if (sessionIdHeader != null) {
                         headers.set("X-Session-Id", sessionIdHeader);
                     }
+                    String clientStartHeader = attr.getRequest().getHeader("X-Client-Start-Time");
+                    if (clientStartHeader != null) {
+                        headers.set("X-Client-Start-Time", clientStartHeader);
+                    }
                 }
             } catch (Exception e) {
                 // Ignore context failures (e.g. background threads)
@@ -105,7 +109,6 @@ public class SearchServiceImpl implements SearchService {
 
             if (apiResponse == null || apiResponse.getResults() == null || apiResponse.getResults().isEmpty()) {
                 log.info("No semantic search results returned from FastAPI for query: {}", query);
-                logSearch(query, 0, (int) (System.currentTimeMillis() - startTime));
                 return Collections.emptyList();
             }
 
@@ -126,7 +129,6 @@ public class SearchServiceImpl implements SearchService {
                 throw new RuntimeException("No active matching products found in local database for the returned semantic UUIDs");
             }
 
-            logSearch(query, results.size(), (int) (System.currentTimeMillis() - startTime));
             return results;
 
         } catch (Exception e) {
@@ -223,6 +225,10 @@ public class SearchServiceImpl implements SearchService {
                     if (sessionIdHeader != null) {
                         headers.set("X-Session-Id", sessionIdHeader);
                     }
+                    String clientStartHeader = attr.getRequest().getHeader("X-Client-Start-Time");
+                    if (clientStartHeader != null) {
+                        headers.set("X-Client-Start-Time", clientStartHeader);
+                    }
                 }
             } catch (Exception e) {
                 // Ignore context failures
@@ -234,7 +240,6 @@ public class SearchServiceImpl implements SearchService {
 
             if (apiResponse == null || apiResponse.getResults() == null || apiResponse.getResults().isEmpty()) {
                 log.info("No semantic search results returned from FastAPI for paginated query: {}", query);
-                logSearch(query, 0, (int) (System.currentTimeMillis() - startTime));
                 return PageResponse.<ProductResponse>builder()
                         .content(Collections.emptyList())
                         .page(page)
@@ -303,7 +308,6 @@ public class SearchServiceImpl implements SearchService {
                     content = filteredList.subList(fromIndex, toIndex);
                 }
 
-                logSearch(query, content.size(), (int) (System.currentTimeMillis() - startTime));
                 return PageResponse.<ProductResponse>builder()
                         .content(content)
                         .page(page)
@@ -323,7 +327,6 @@ public class SearchServiceImpl implements SearchService {
                 }
                 int totalPages = (int) Math.ceil((double) totalElements / size);
 
-                logSearch(query, hydratedList.size(), (int) (System.currentTimeMillis() - startTime));
                 return PageResponse.<ProductResponse>builder()
                         .content(hydratedList)
                         .page(page)
@@ -399,6 +402,7 @@ public class SearchServiceImpl implements SearchService {
         }
         try {
             String sessionId = "anonymous";
+            int finalLatencyMs = latencyMs;
             try {
                 ServletRequestAttributes attr = (ServletRequestAttributes) RequestContextHolder.currentRequestAttributes();
                 if (attr != null && attr.getRequest() != null) {
@@ -409,6 +413,16 @@ public class SearchServiceImpl implements SearchService {
                         } else {
                             sessionId = attr.getRequest().getRemoteAddr();
                         }
+                    }
+                    String clientStartHeader = attr.getRequest().getHeader("X-Client-Start-Time");
+                    if (clientStartHeader != null) {
+                        try {
+                            long clientStart = Long.parseLong(clientStartHeader);
+                            long now = System.currentTimeMillis();
+                            if (now > clientStart) {
+                                finalLatencyMs = (int) (now - clientStart);
+                            }
+                        } catch (Exception ignored) {}
                     }
                 }
             } catch (Exception e) {
@@ -426,7 +440,7 @@ public class SearchServiceImpl implements SearchService {
                     .user(user)
                     .queryText(query != null && query.length() > 500 ? query.substring(0, 500) : query)
                     .resultsCount(resultsCount)
-                    .latencyMs(latencyMs)
+                    .latencyMs(finalLatencyMs)
                     .build();
 
             searchLogRepository.save(searchLog);
