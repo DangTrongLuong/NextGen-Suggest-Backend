@@ -225,6 +225,10 @@ public class SearchServiceImpl implements SearchService {
                     if (sessionIdHeader != null) {
                         headers.set("X-Session-Id", sessionIdHeader);
                     }
+                    String userIdHeader = attr.getRequest().getHeader("X-User-Id");
+                    if (userIdHeader != null) {
+                        headers.set("X-User-Id", userIdHeader);
+                    }
                     String clientStartHeader = attr.getRequest().getHeader("X-Client-Start-Time");
                     if (clientStartHeader != null) {
                         headers.set("X-Client-Start-Time", clientStartHeader);
