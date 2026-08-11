@@ -188,10 +188,10 @@ public class SearchServiceImpl implements SearchService {
             // Determine if we need to post-process filter/sort in Java
             boolean needsJavaFilterOrSort = (minRating != null)
                     || (mainId != null)
-                    || (sortBy != null && !sortBy.trim().isEmpty() && !sortBy.equalsIgnoreCase("newest"));
+                    || (sortBy != null && !sortBy.trim().isEmpty() && !sortBy.equalsIgnoreCase("newest") && !sortBy.equalsIgnoreCase("createdAt"));
 
-            // If we need post-processing, fetch a larger pool of top candidates from FastAPI
-            int fetchSize = needsJavaFilterOrSort ? 100 : size;
+            // If we need post-processing, fetch a smaller reasonable pool (max 25) from FastAPI
+            int fetchSize = needsJavaFilterOrSort ? 25 : size;
             int fetchPage = needsJavaFilterOrSort ? 0 : page;
 
             UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(fastApiUrl)

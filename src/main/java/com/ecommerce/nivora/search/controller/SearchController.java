@@ -39,7 +39,7 @@ public class SearchController {
             @RequestParam("q") String query,
             @RequestParam(value = "rerank", defaultValue = "true") boolean rerank,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "12") int size,
+            @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String categorySlug,
             @RequestParam(required = false) String categoryMainSlug,
             @RequestParam(required = false) Double minPrice,
