@@ -29,7 +29,8 @@ public class AsyncConfig {
         executor.setQueueCapacity(200);
         executor.setThreadNamePrefix("async-task-");
         executor.setKeepAliveSeconds(60);
-        // CallerRunsPolicy: if queue full, calling thread runs the task instead of dropping it
+        // CallerRunsPolicy: if queue full, calling thread runs the task instead of
+        // dropping it
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(30);
