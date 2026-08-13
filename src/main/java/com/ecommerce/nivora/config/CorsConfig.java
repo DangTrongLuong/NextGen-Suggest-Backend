@@ -25,6 +25,8 @@ public class CorsConfig {
                 frontendUrl,
                 "http://localhost:5173",
                 "http://127.0.0.1:5173",
+                "http://localhost:5174",
+                "http://127.0.0.1:5174",
                 "https://datn-nextgen-suggest.site"));
 
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
