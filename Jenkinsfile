@@ -34,7 +34,17 @@ pipeline {
                     if (!fileExists('pom.xml')) {
                         error "LỖI: Không tìm thấy file 'pom.xml' ở thư mục gốc của dự án. Hủy pipeline!"
                     }
-                    echo "Xác thực thành công: Tìm thấy file pom.xml."
+                }
+            }
+        }
+
+        stage('Prepare Environment') {
+            steps {
+                script {
+                    if (!fileExists('.env') && fileExists('.env.example')) {
+                        echo 'Tự động sao chép .env.example -> .env cho môi trường CI...'
+                        sh 'cp .env.example .env'
+                    }
                 }
             }
         }
