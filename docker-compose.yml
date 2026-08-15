@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  backend:
+    container_name: nextgen-backend
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nextgen-backend:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "8080:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - nextgen-network
+
+networks:
+  nextgen-network:
+    external: true
