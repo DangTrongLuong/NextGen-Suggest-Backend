@@ -58,10 +58,10 @@ pipeline {
             }
         }
 
-        stage('Deploy Docker Container (CD)') {
+        stage('Deploy Docker Container (Zero Downtime CD)') {
             steps {
                 script {
-                    echo '=== Bắt đầu quy trình CD: Build Docker Image & Deploy bằng Docker Compose ==='
+                    echo '=== Bắt đầu Spring Boot Blue-Green Deployment (0ms Downtime) ==='
                     sh '''
                         set -eux
 
@@ -72,19 +72,50 @@ pipeline {
                             docker run --rm -v "$REAL_ENV":/host_env alpine cat /host_env > .env || true
                         fi
 
-                        # 1. Đảm bảo network chung nextgen-network tồn tại
+                        if [ -d "nginx-ai.conf" ]; then
+                            rm -rf nginx-ai.conf
+                        fi
+
                         docker network create nextgen-network || true
 
-                        # 2. Tái tạo container bằng docker-compose.yml của repo
-                        docker compose up -d --build backend
+                        IS_BLUE_RUNNING=$(docker ps --filter "status=running" --format '{{.Names}}' | grep -w "backend-blue" || true)
 
-                        # 3. Kiểm tra trạng thái Container vừa khởi chạy
-                        sleep 5
-                        docker ps | grep nextgen-backend || true
+                        if [ -n "$IS_BLUE_RUNNING" ]; then
+                            TARGET="backend-green"
+                            OLD="backend-blue"
+                        else
+                            TARGET="backend-blue"
+                            OLD="backend-green"
+                        fi
 
-                        # 4. Tự động xóa sạch toàn bộ Build Cache và Image rác dư thừa sau khi build xong
-                        docker builder prune -a -f || true
-                        docker image prune -a -f || true
+                        echo "Target: $TARGET | Old: $OLD"
+
+                        docker compose build $TARGET
+                        docker compose up -d $TARGET
+
+                        HEALTHY=0
+                        for i in $(seq 1 60); do
+                            STATUS_CODE=$(docker exec $TARGET curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/v3/api-docs || echo "000")
+                            if [ "$STATUS_CODE" = "200" ] || [ "$STATUS_CODE" = "302" ]; then
+                                echo "$TARGET is healthy (Status $STATUS_CODE)!"
+                                HEALTHY=1
+                                break
+                            fi
+                            sleep 3
+                        done
+
+                        if [ "$HEALTHY" -ne 1 ]; then
+                            echo "$TARGET healthcheck failed. Keeping $OLD."
+                            docker compose stop $TARGET || true
+                            exit 1
+                        fi
+
+                        docker compose up -d backend
+
+                        printf 'upstream spring_backend_cluster {\n    server %s:8080;\n}\n\nserver {\n    listen 8080;\n    server_name _;\n\n    client_max_body_size 50M;\n\n    location / {\n        proxy_pass http://spring_backend_cluster;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }\n}\n' "$TARGET" | docker exec -i nextgen-backend tee /etc/nginx/conf.d/default.conf > /dev/null
+
+                        docker exec nextgen-backend nginx -s reload || true
+                        docker compose stop $OLD || true
                     '''
                 }
             }
@@ -102,6 +133,11 @@ pipeline {
 
         always {
             echo "Trạng thái cuối cùng: ${currentBuild.currentResult}"
+            sh '''
+                echo "Đang dọn dẹp Docker build cache và image rác..."
+                docker builder prune -a -f || true
+                docker image prune -a -f || true
+            '''
             echo 'Đang dọn dẹp Jenkins workspace...'
             cleanWs()
         }
