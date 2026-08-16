@@ -3,6 +3,17 @@ version: '3.8'
 services:
   backend:
     container_name: nextgen-backend
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - spring_nginx_conf:/etc/nginx/conf.d
+    networks:
+      - nextgen-network
+
+  backend-blue:
+    container_name: backend-blue
     build:
       context: .
       dockerfile: Dockerfile
@@ -10,12 +21,28 @@ services:
     restart: unless-stopped
     env_file:
       - .env
-    ports:
-      - "8080:8080"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
       - nextgen-network
+
+  backend-green:
+    container_name: backend-green
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nextgen-backend:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - nextgen-network
+
+volumes:
+  spring_nginx_conf:
+    name: nextgen-backend-nginx-conf
 
 networks:
   nextgen-network:
