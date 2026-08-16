@@ -158,23 +158,27 @@ public class ChatServiceImpl implements ChatService {
                         }
                     }
                     
-                    if (dbProduct != null) {
-                        // Thiết lập điểm số và lý do gợi ý cho sản phẩm chatbot
-                        dbProduct.setRecommendationScore(res.getScore());
-                        dbProduct.setRecommendationReason(res.getReason() != null ? res.getReason() : "Gợi ý từ trợ lý AI");
-                        hydratedProducts.add(dbProduct);
+                    if (dbProduct == null) {
+                        dbProduct = mapFromFastApi(res);
                     }
+                    
+                    dbProduct.setRecommendationScore(res.getScore());
+                    dbProduct.setRecommendationReason(res.getReason() != null ? res.getReason() : "Gợi ý từ trợ lý AI");
+                    hydratedProducts.add(dbProduct);
                 }
                 
                 // Fallback: Nếu không tìm thấy bất kỳ sản phẩm nào có sẵn trong database local,
-                // truy vấn database local bằng từ khóa tin nhắn cuối cùng để tìm sản phẩm liên quan.
+                // truy vấn database local bằng từ khóa tin nhắn đã làm sạch stop words.
                 if (hydratedProducts.isEmpty()) {
                     String lastMessage = request.getMessages().get(request.getMessages().size() - 1).getContent();
-                    log.info("Suggested products empty after hydration. Querying MySQL fallback search for: {}", lastMessage);
+                    String cleanSearch = lastMessage.replaceAll("(?i)\\b(tìm|mua|bán|cho|tôi|muốn|cần|bạn|giúp|vui lòng|mình|shop|hãy|được không|giới thiệu|gợi ý|ạ|ơi|nhé|nha|với|giùm|coi|xem)\\b", "").trim().replaceAll("\\s+", " ");
+                    if (cleanSearch.isBlank()) cleanSearch = lastMessage;
+
+                    log.info("Suggested products empty after hydration. Querying MySQL fallback search for: {}", cleanSearch);
                     try {
                         PageResponse<ProductResponse> localSearch = productService.getAll(
-                                null, null, null, null, null, null, null, lastMessage,
-                                PageRequest.of(0, 4, Sort.by(Sort.Direction.DESC, "createdAt"))
+                                null, null, null, null, null, null, null, cleanSearch,
+                                PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"))
                         );
                         if (localSearch != null && localSearch.getContent() != null) {
                             hydratedProducts.addAll(localSearch.getContent());
@@ -208,15 +212,32 @@ public class ChatServiceImpl implements ChatService {
                     .build();
 
         } catch (Exception e) {
-            log.error("Failed to fetch response from chatbot FastAPI, falling back to featured products", e);
+            log.error("Failed to fetch response from chatbot FastAPI, falling back to local product search", e);
             List<ProductResponse> fallbackProducts = Collections.emptyList();
+            String lastMsg = (request.getMessages() != null && !request.getMessages().isEmpty())
+                    ? request.getMessages().get(request.getMessages().size() - 1).getContent()
+                    : "áo thun";
+
+            String cleanKeyword = lastMsg.replaceAll("(?i)\\b(tìm|mua|bán|cho|tôi|muốn|cần|bạn|giúp|vui lòng|mình|shop|hãy|được không|giới thiệu|gợi ý|ạ|ơi|nhé|nha|với|giùm|coi|xem)\\b", "").trim().replaceAll("\\s+", " ");
+            if (cleanKeyword.isBlank()) cleanKeyword = "áo";
+
             try {
-                fallbackProducts = productService.getFeatured();
+                PageResponse<ProductResponse> localSearch = productService.getAll(
+                        null, null, null, null, null, null, null, cleanKeyword,
+                        PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"))
+                );
+                if (localSearch != null && localSearch.getContent() != null && !localSearch.getContent().isEmpty()) {
+                    fallbackProducts = localSearch.getContent();
+                } else {
+                    fallbackProducts = productService.getFeatured();
+                }
             } catch (Exception ex) {
-                log.error("Failed to load fallback featured products for chat", ex);
+                log.error("Failed to load fallback products for chat", ex);
             }
+
+            String respText = "Dưới đây là các sản phẩm **" + cleanKeyword + "** phù hợp nhất tại Nivora dành cho bạn:";
             return ChatResponse.builder()
-                    .response("Hiện tại hệ thống trợ lý ảo đang bận hoặc đang bảo trì. Bạn có thể tham khảo một số sản phẩm nội thất nổi bật dưới đây của cửa hàng nhé!")
+                    .response(respText)
                     .suggestedProducts(fallbackProducts)
                     .build();
         }

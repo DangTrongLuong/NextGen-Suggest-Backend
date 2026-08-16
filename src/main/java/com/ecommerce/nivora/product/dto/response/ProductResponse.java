@@ -16,6 +16,7 @@ import java.util.List;
 public class ProductResponse {
     private Long id;
     private String uuid;
+    private String requestId;
     private String name;
     private String slug;
     private String shortDescription;

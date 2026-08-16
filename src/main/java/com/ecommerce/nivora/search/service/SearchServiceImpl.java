@@ -120,8 +120,15 @@ public class SearchServiceImpl implements SearchService {
             Map<String, ProductResponse> dbProductsByUuid = productService.getActiveProductsByUuids(uuids);
             log.info("Hydrated {}/{} semantic results from database. Requested UUIDs: {}, Found Keys: {}", dbProductsByUuid.size(), uuids.size(), uuids, dbProductsByUuid.keySet());
 
+            String reqId = apiResponse.getRequestId();
             List<ProductResponse> results = apiResponse.getResults().stream()
-                    .map(res -> dbProductsByUuid.get(res.getProductId()))
+                    .map(res -> {
+                        ProductResponse p = dbProductsByUuid.get(res.getProductId());
+                        if (p != null && reqId != null) {
+                            p.setRequestId(reqId);
+                        }
+                        return p;
+                    })
                     .filter(Objects::nonNull)
                     .collect(Collectors.toList());
 
@@ -263,8 +270,15 @@ public class SearchServiceImpl implements SearchService {
             Map<String, ProductResponse> dbProductsByUuid = productService.getActiveProductsByUuids(uuids);
             log.info("Hydrated {}/{} semantic results from database. Requested UUIDs: {}, Found Keys: {}", dbProductsByUuid.size(), uuids.size(), uuids, dbProductsByUuid.keySet());
 
+            String reqId = apiResponse.getRequestId();
             List<ProductResponse> hydratedList = resultsList.stream()
-                    .map(res -> dbProductsByUuid.get(res.getProductId()))
+                    .map(res -> {
+                        ProductResponse p = dbProductsByUuid.get(res.getProductId());
+                        if (p != null && reqId != null) {
+                            p.setRequestId(reqId);
+                        }
+                        return p;
+                    })
                     .filter(Objects::nonNull)
                     .collect(Collectors.toList());
 
