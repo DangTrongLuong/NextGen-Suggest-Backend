@@ -112,7 +112,7 @@ pipeline {
 
                         docker compose up -d backend
 
-                        printf 'upstream spring_backend_cluster {\n    server %s:8080;\n}\n\nserver {\n    listen 8080;\n    server_name _;\n\n    client_max_body_size 50M;\n\n    location / {\n        proxy_pass http://spring_backend_cluster;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }\n}\n' "$TARGET" | docker exec -i nextgen-backend tee /etc/nginx/conf.d/default.conf > /dev/null
+                        printf 'upstream spring_backend_cluster {\n    server %s:8080;\n}\n\nserver {\n    listen 8080;\n    server_name _;\n\n    client_max_body_size 50M;\n\n    location / {\n        proxy_pass http://spring_backend_cluster;\n        proxy_http_version 1.1;\n        proxy_set_header Upgrade $http_upgrade;\n        proxy_set_header Connection "upgrade";\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }\n}\n' "$TARGET" | docker exec -i nextgen-backend tee /etc/nginx/conf.d/default.conf > /dev/null
 
                         docker exec nextgen-backend nginx -s reload || true
                         docker compose stop $OLD || true
