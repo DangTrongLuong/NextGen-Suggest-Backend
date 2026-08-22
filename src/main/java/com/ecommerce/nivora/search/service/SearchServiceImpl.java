@@ -85,8 +85,6 @@ public class SearchServiceImpl implements SearchService {
                     .encode(java.nio.charset.StandardCharsets.UTF_8)
                     .toUri();
 
-            log.info("Forwarding search query '{}' (rerank={}, topK={}) to FastAPI: {}", query, rerank, safeTopK, targetUri);
-
             HttpHeaders headers = new HttpHeaders();
             try {
                 ServletRequestAttributes attr = (ServletRequestAttributes) RequestContextHolder.currentRequestAttributes();
@@ -94,6 +92,17 @@ public class SearchServiceImpl implements SearchService {
                     String sessionIdHeader = attr.getRequest().getHeader("X-Session-Id");
                     if (sessionIdHeader != null) {
                         headers.set("X-Session-Id", sessionIdHeader);
+                    }
+                    String userIdHeader = attr.getRequest().getHeader("X-User-Id");
+                    if (userIdHeader != null) {
+                        headers.set("X-User-Id", userIdHeader);
+                    } else {
+                        try {
+                            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+                            if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
+                                userRepository.findActiveByEmail(auth.getName()).ifPresent(u -> headers.set("X-User-Id", String.valueOf(u.getId())));
+                            }
+                        } catch (Exception ignored) {}
                     }
                     String clientStartHeader = attr.getRequest().getHeader("X-Client-Start-Time");
                     if (clientStartHeader != null) {
