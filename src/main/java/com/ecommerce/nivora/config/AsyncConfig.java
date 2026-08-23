@@ -24,9 +24,9 @@ public class AsyncConfig {
     @Bean(name = "asyncExecutor")
     public Executor asyncExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(4);
-        executor.setMaxPoolSize(8);
-        executor.setQueueCapacity(200);
+        executor.setCorePoolSize(6);
+        executor.setMaxPoolSize(12);
+        executor.setQueueCapacity(500);
         executor.setThreadNamePrefix("async-task-");
         executor.setKeepAliveSeconds(60);
         // CallerRunsPolicy: if queue full, calling thread runs the task instead of
