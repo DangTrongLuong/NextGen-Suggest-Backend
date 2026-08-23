@@ -110,5 +110,5 @@ springdoc:
 logging:
   level:
     com.ecommerce.nivora: INFO
-    org.springframework.security: WARN
+    org.springframework.security: INFO
     org.hibernate.SQL: WARN
