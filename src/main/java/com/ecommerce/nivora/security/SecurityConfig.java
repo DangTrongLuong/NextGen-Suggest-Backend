@@ -30,6 +30,7 @@ public class SecurityConfig {
     private final JwtAuthFilter jwtAuthFilter;
     private final UserDetailsServiceImpl userDetailsService;
     private final OAuth2SuccessHandler oAuth2SuccessHandler;
+    private final OAuth2FailureHandler oAuth2FailureHandler;
     private final CorsConfigurationSource corsConfigurationSource;
 
     @Value("${app.frontend-url}")
@@ -76,7 +77,7 @@ public class SecurityConfig {
                         .authorizationEndpoint(endpoint -> endpoint.baseUri("/oauth2/authorization"))
                         .redirectionEndpoint(endpoint -> endpoint.baseUri("/login/oauth2/code/*"))
                         .successHandler(oAuth2SuccessHandler)
-                        .failureUrl(frontendUrl + "/?error=oauth2_failed"))
+                        .failureHandler(oAuth2FailureHandler))
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable);

@@ -133,6 +133,9 @@ public class SearchServiceImpl implements SearchService {
             List<ProductResponse> results = apiResponse.getResults().stream()
                     .map(res -> {
                         ProductResponse p = dbProductsByUuid.get(res.getProductId());
+                        if (p == null) {
+                            p = mapFromFastApi(res);
+                        }
                         if (p != null && reqId != null) {
                             p.setRequestId(reqId);
                         }
@@ -283,6 +286,9 @@ public class SearchServiceImpl implements SearchService {
             List<ProductResponse> hydratedList = resultsList.stream()
                     .map(res -> {
                         ProductResponse p = dbProductsByUuid.get(res.getProductId());
+                        if (p == null) {
+                            p = mapFromFastApi(res);
+                        }
                         if (p != null && reqId != null) {
                             p.setRequestId(reqId);
                         }
