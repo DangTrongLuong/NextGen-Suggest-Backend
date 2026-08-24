@@ -46,8 +46,12 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQL8Dialect
-        format_sql: true
-        default_batch_fetch_size: 20
+        format_sql: false
+        default_batch_fetch_size: 50
+        order_inserts: true
+        order_updates: true
+        jdbc:
+          batch_size: 50
 
   security:
     oauth2:

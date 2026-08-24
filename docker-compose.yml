@@ -19,6 +19,10 @@ services:
       dockerfile: Dockerfile
     image: nextgen-backend:latest
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1.5G
     env_file:
       - .env
     extra_hosts:
@@ -33,6 +37,10 @@ services:
       dockerfile: Dockerfile
     image: nextgen-backend:latest
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1.5G
     env_file:
       - .env
     extra_hosts:
