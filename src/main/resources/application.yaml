@@ -1,6 +1,11 @@
 server:
   port: 8080
   forward-headers-strategy: framework
+  tomcat:
+    threads:
+      max: 500
+      min-spare: 50
+    accept-count: 1000
 
 spring:
   config:
@@ -28,10 +33,10 @@ spring:
     password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
-      connection-timeout: 30000
-      maximum-pool-size: 10
+      connection-timeout: 10000
+      maximum-pool-size: 80
       max-lifetime: 1800000
-      minimum-idle: 5
+      minimum-idle: 20
       idle-timeout: 600000
 
   jpa:
