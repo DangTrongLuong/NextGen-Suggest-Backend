@@ -413,16 +413,35 @@ public class SearchServiceImpl implements SearchService {
 
     @Override
     public List<String> getTopSearchKeywords(int limit) {
+        String cacheKey = "search:top_keywords:" + limit;
+        try {
+            String cached = redisTemplate.opsForValue().get(cacheKey);
+            if (cached != null && !cached.isEmpty()) {
+                return Arrays.asList(cached.split(","));
+            }
+        } catch (Exception e) {
+            log.warn("Redis read error for top search keywords cache: {}", e.getMessage());
+        }
+
         try {
             int safeLimit = Math.max(1, limit);
             List<Object[]> topQueries = searchLogRepository.findTopQueries(PageRequest.of(0, safeLimit));
             if (topQueries == null) {
                 return Collections.emptyList();
             }
-            return topQueries.stream()
+            List<String> results = topQueries.stream()
                     .map(row -> row != null && row.length > 0 && row[0] != null ? row[0].toString().trim() : null)
                     .filter(q -> q != null && !q.isEmpty() && !SearchQuerySanitizer.isMaliciousOrInvalid(q))
                     .collect(Collectors.toList());
+
+            if (!results.isEmpty()) {
+                try {
+                    redisTemplate.opsForValue().set(cacheKey, String.join(",", results), Duration.ofMinutes(10));
+                } catch (Exception e) {
+                    log.warn("Redis write error for top search keywords cache: {}", e.getMessage());
+                }
+            }
+            return results;
         } catch (Exception e) {
             log.error("Failed to fetch top search keywords", e);
             return Collections.emptyList();
