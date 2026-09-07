@@ -62,7 +62,7 @@ public class SearchServiceImpl implements SearchService {
     private String fastApiUrl;
 
     @Override
-    public List<ProductResponse> search(String query, boolean rerank, int topK) {
+    public List<ProductResponse> search(String query, boolean rerank, int topK, boolean useAi) {
         if (query == null || query.trim().isEmpty() || SearchQuerySanitizer.isMaliciousOrInvalid(query)) {
             if (query != null && SearchQuerySanitizer.isMaliciousOrInvalid(query)) {
                 log.warn("Blocked malicious/invalid search query: '{}'", query);
@@ -73,6 +73,20 @@ public class SearchServiceImpl implements SearchService {
         long startTime = System.currentTimeMillis();
         int safeTopK = Math.min(Math.max(topK, 1), 150);
         int candidateK = rerank ? Math.min(Math.max((int) (safeTopK * 1.5), 15), 200) : safeTopK;
+
+        if (!useAi) {
+            log.info("Executing direct Spring Boot DB keyword search (AI disabled) for query: '{}'", query);
+            logSearch(query, 0, (int) (System.currentTimeMillis() - startTime));
+            try {
+                PageResponse<ProductResponse> dbResult = productService.getAll(
+                        null, null, null, null, null, null, null, query, PageRequest.of(0, safeTopK)
+                );
+                return dbResult.getContent();
+            } catch (Exception ex) {
+                log.error("Database search (AI disabled) failed", ex);
+                return Collections.emptyList();
+            }
+        }
 
         try {
             java.net.URI targetUri = UriComponentsBuilder.fromHttpUrl(fastApiUrl)
@@ -170,7 +184,7 @@ public class SearchServiceImpl implements SearchService {
             String query, boolean rerank, int page, int size,
             String categorySlug, String categoryMainSlug,
             Double minPrice, Double maxPrice, Double minRating,
-            String sortBy, String sortDir
+            String sortBy, String sortDir, boolean useAi
     ) {
         if (query == null || query.trim().isEmpty() || SearchQuerySanitizer.isMaliciousOrInvalid(query)) {
             if (query != null && SearchQuerySanitizer.isMaliciousOrInvalid(query)) {
@@ -187,6 +201,42 @@ public class SearchServiceImpl implements SearchService {
         }
 
         long startTime = System.currentTimeMillis();
+
+        // If AI disabled, go directly to DB keyword search
+        if (!useAi) {
+            log.info("Executing direct Spring Boot DB keyword search (AI disabled) for paginated query: '{}'", query);
+            logSearch(query, 0, 0);
+            try {
+                org.springframework.data.domain.Sort sort = org.springframework.data.domain.Sort.unsorted();
+                if (sortBy != null && !sortBy.trim().isEmpty()) {
+                    if (sortBy.equalsIgnoreCase("price-asc")) {
+                        sort = org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.ASC, "basePrice");
+                    } else if (sortBy.equalsIgnoreCase("price-desc")) {
+                        sort = org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "basePrice");
+                    } else if (sortBy.equalsIgnoreCase("newest")) {
+                        sort = org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt");
+                    }
+                }
+                return productService.getAll(
+                        null,
+                        categorySlug,
+                        categoryMainSlug,
+                        null,
+                        minPrice != null ? java.math.BigDecimal.valueOf(minPrice) : null,
+                        maxPrice != null ? java.math.BigDecimal.valueOf(maxPrice) : null,
+                        minRating != null ? java.math.BigDecimal.valueOf(minRating) : null,
+                        query,
+                        PageRequest.of(page, size, sort)
+                );
+            } catch (Exception ex) {
+                log.error("Database keyword search (AI disabled) paginated failed", ex);
+                return PageResponse.<ProductResponse>builder()
+                        .content(Collections.emptyList())
+                        .page(page).size(size).totalElements(0).totalPages(0).last(true)
+                        .build();
+            }
+        }
+
         try {
             // Resolve Category Name if categorySlug is present
             String categoryName = null;

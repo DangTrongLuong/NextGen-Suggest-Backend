@@ -7,12 +7,12 @@ import com.ecommerce.nivora.product.dto.response.ProductResponse;
 import java.util.List;
 
 public interface SearchService {
-    List<ProductResponse> search(String query, boolean rerank, int topK);
+    List<ProductResponse> search(String query, boolean rerank, int topK, boolean useAi);
     PageResponse<ProductResponse> searchPaginated(
             String query, boolean rerank, int page, int size,
             String categorySlug, String categoryMainSlug,
             Double minPrice, Double maxPrice, Double minRating,
-            String sortBy, String sortDir
+            String sortBy, String sortDir, boolean useAi
     );
     List<String> getTopSearchKeywords(int limit);
 }
