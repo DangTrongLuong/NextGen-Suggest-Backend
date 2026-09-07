@@ -23,18 +23,19 @@ public class SearchController {
     private final SearchService searchService;
 
     @GetMapping
-    @Operation(summary = "Perform semantic search & reranking via FastAPI")
+    @Operation(summary = "Perform search (AI semantic or keyword DB search)")
     public ResponseEntity<ApiResponse<List<ProductResponse>>> search(
             @RequestParam("q") String query,
             @RequestParam(value = "rerank", defaultValue = "true") boolean rerank,
-            @RequestParam(value = "top_k", defaultValue = "10") int topK
+            @RequestParam(value = "top_k", defaultValue = "10") int topK,
+            @RequestParam(value = "use_ai", defaultValue = "true") boolean useAi
     ) {
-        List<ProductResponse> results = searchService.search(query, rerank, topK);
+        List<ProductResponse> results = searchService.search(query, rerank, topK, useAi);
         return ResponseEntity.ok(ApiResponse.success(results));
     }
 
     @GetMapping("/paginated")
-    @Operation(summary = "Perform semantic search & reranking via FastAPI with pagination")
+    @Operation(summary = "Perform search (AI semantic or keyword DB search) with pagination")
     public ResponseEntity<ApiResponse<PageResponse<ProductResponse>>> searchPaginated(
             @RequestParam("q") String query,
             @RequestParam(value = "rerank", defaultValue = "true") boolean rerank,
@@ -46,10 +47,11 @@ public class SearchController {
             @RequestParam(required = false) Double maxPrice,
             @RequestParam(required = false) Double minRating,
             @RequestParam(required = false) String sortBy,
-            @RequestParam(required = false) String sortDir
+            @RequestParam(required = false) String sortDir,
+            @RequestParam(value = "use_ai", defaultValue = "true") boolean useAi
     ) {
         PageResponse<ProductResponse> results = searchService.searchPaginated(
-                query, rerank, page, size, categorySlug, categoryMainSlug, minPrice, maxPrice, minRating, sortBy, sortDir
+                query, rerank, page, size, categorySlug, categoryMainSlug, minPrice, maxPrice, minRating, sortBy, sortDir, useAi
         );
         return ResponseEntity.ok(ApiResponse.success(results));
     }
